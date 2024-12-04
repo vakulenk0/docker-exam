@@ -32,8 +32,8 @@ function CanvasApp() {
             const canvasElement = canvasRef.current;
 
             const initCanvas = new Canvas(canvasRef.current, {
-                width: window.innerWidth,
-                height: window.innerHeight,
+                width: 500,
+                height: 500,
                 backgroundColor: '#f0f0f0',
             });
 
@@ -66,27 +66,32 @@ function CanvasApp() {
                 }
             };
 
-            initCanvas.on('mouse:wheel', function (event) {
-                var e = event.e;
-                e.preventDefault();
-                e.stopPropagation();
-            
-                const pointer = initCanvas.getPointer(e);
-                let zoom = initCanvas.getZoom();
-            
-                const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
-                const newZoom = Math.min(Math.max(zoom * zoomFactor, 0.5), 4); // Ограничение масштаба от 0.5 до 4
-            
-                const zoomChange = newZoom / zoom;
-                const viewportTransform = initCanvas.viewportTransform;
-                viewportTransform[4] -= (pointer.x - viewportTransform[4]) * (zoomChange - 1);
-                viewportTransform[5] -= (pointer.y - viewportTransform[5]) * (zoomChange - 1);
-            
-                initCanvas.setViewportTransform(viewportTransform);
-                initCanvas.setZoom(newZoom);
-            
-                initCanvas.requestRenderAll();
+            const SCALE_FACTOR = 1.1; // Коэффициент зума
+            const ZOOM_MAX = 10;      // Максимальный масштаб
+            const ZOOM_MIN = 0.5;     // Минимальный масштаб
+
+            // Обработка зума колесиком мыши
+            initCanvas.on('mouse:wheel', (event) => {
+                event.e.preventDefault();
+
+                const delta = event.e.deltaY; // Получаем направление прокрутки
+                const zoomDirection = delta > 0 ? 'out' : 'in';
+                const currentZoom = initCanvas.getZoom();
+                let newZoom = zoomDirection === 'in' ? currentZoom * SCALE_FACTOR : currentZoom / SCALE_FACTOR;
+
+                // Ограничиваем зум
+                if (newZoom > ZOOM_MAX) newZoom = ZOOM_MAX;
+                if (newZoom < ZOOM_MIN) newZoom = ZOOM_MIN;
+
+                // Центрируем масштабирование в точке указателя мыши
+                const pointer = initCanvas.getPointer(event.e);
+                initCanvas.zoomToPoint(pointer, newZoom);
+
+                initCanvas.renderAll();
+                console.log(initCanvas.getZoom());
             });
+            
+            
 
             initCanvas.on('mouse:down', function(event) {
                 var e = event.e;
