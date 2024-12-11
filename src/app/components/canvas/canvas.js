@@ -3,6 +3,7 @@
 
 import { useEffect, useRef } from 'react';
 import { Canvas, Rect, Point, util, ActiveSelection, PencilBrush, Pattern, Textbox} from 'fabric/es';
+import {red} from "next/dist/lib/picocolors";
 
 // Привязка ActiveSelection к Canvas
 Canvas.ActiveSelection = ActiveSelection;
@@ -400,27 +401,32 @@ const CanvasComponent = ({ toggleDrawing, addTextTrigger, resetAddTextTrigger  }
   useEffect(() => {
     if (addTextTrigger) {
       const canvas = canvasRef.current.__canvas;
-      const text = new Textbox('Your Text Here', {
+      const textbox = new Textbox("Первая строка\nВторая строка\nТретья строка", {
         left: 100,  // Позиция текста
         top: 100,
-        fontSize: 100,
+        fontSize: 20,
+        fontFamily: 'Helvetica',
         fill: 'black',
         editable: true,
+        strokeWidth: 10,
+        backgroundColor: 'red',
+        textAlign: 'left',
       });
-      text.setControlsVisibility({
+
+      textbox.setControlsVisibility({
         mt: false, // Верхний
         mb: false, // Нижний
-        ml: false, // Левый
-        mr: false, // Правый
+        ml: true, // Левый
+        mr: true, // Правый
         mtr: true,  // Верхний поворотный (оставляем, если нужно)
         bl: true,  // Нижний левый угол
         br: true,  // Нижний правый угол
         tl: true,  // Верхний левый угол
         tr: true,  // Верхний правый угол
       });
-      console.log(text.getCurrentCharFontSize())
 
-      canvas.add(text);
+      canvas.add(textbox);
+      console.log(textbox.width)
       canvas.renderAll();
 
       // Сбрасываем триггер после добавления текста
