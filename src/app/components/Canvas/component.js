@@ -1,9 +1,10 @@
-// components/canvas/CanvasComponent.js
+// components/Canvas/CanvasComponent.js
 'use client';
 
-import { useEffect, useRef } from 'react';
-import { Canvas, Rect, Point, util, ActiveSelection, PencilBrush, Pattern, Textbox} from 'fabric/es';
-import {red} from "next/dist/lib/picocolors";
+import {useEffect, useRef, useState} from 'react';
+import {ActiveSelection, Canvas, Pattern, PencilBrush, Point, Rect, Textbox} from 'fabric/es';
+import ZoomIndicator from "@/app/components/ZoomIndicator/component";
+import LeftPanel from "@/app/components/LeftPanel/component";
 
 // Привязка ActiveSelection к Canvas
 Canvas.ActiveSelection = ActiveSelection;
@@ -13,8 +14,10 @@ const ZOOM_LEVEL_MAX = 3;
 
 const CanvasComponent = ({ toggleDrawing, addTextTrigger, resetAddTextTrigger  }) => {
   const canvasRef = useRef(null);
+  const [canvasInstance, setCanvasInstance] = useState(null);
 
   const zoomLevelRef = useRef(0);
+  const [zoomPercent, setZoomPercent] = useState(100);
   const panningActiveRef = useRef(false);
   const mouseDownPointRef = useRef(null);
 
@@ -30,20 +33,59 @@ const CanvasComponent = ({ toggleDrawing, addTextTrigger, resetAddTextTrigger  }
 
   const ctrlPressedRef = useRef(false); // Отслеживание нажатия Ctrl
 
+  // // Функция создания паттерна сетки с учетом текущего масштаба
+  // function createGridPattern(canvas, color = '#999') {
+  //   const zoom = canvas.getZoom();
+  //   const gridSize = 50 * zoom;
+  //
+  //   const gridCanvas = document.createElement('canvas');
+  //   gridCanvas.width = gridCanvas.height = gridSize;
+  //
+  //   const gridCtx = gridCanvas.getContext('2d');
+  //   gridCtx.strokeStyle = color; // Цвет линий сетки
+  //   gridCtx.lineWidth = 1;
+  //
+  //   // Рисуем линии сетки
+  //   gridCtx.beginPath();
+  //   // Горизонтальная линия
+  //   gridCtx.moveTo(0, 0);
+  //   gridCtx.lineTo(gridSize, 0);
+  //   // Вертикальная линия
+  //   gridCtx.moveTo(0, 0);
+  //   gridCtx.lineTo(0, gridSize);
+  //   gridCtx.stroke();
+  //
+  //   return new Pattern({
+  //     source: gridCanvas,
+  //     repeat: 'repeat',
+  //   });
+  // }
+  //
+  // // Функция применения сетки на Canvas с учетом масштаба
+  // function updateGridPattern(canvas, color = '#999') {
+  //   const gridPattern = createGridPattern(canvas, color);
+  //   canvas.backgroundColor = gridPattern;
+  //   canvas.renderAll();
+  // }
+
   useEffect(() => {
     const canvasElement = canvasRef.current;
     const canvas = new Canvas(canvasElement, {
       selectionKey: 'ctrlKey',
       backgroundColor: '#EEF2F9'
-      // Не задаём фиксированный размер: будем делать это динамически через resizeCanvas.
     });
+
+    setCanvasInstance(canvas);
+
+    // Применяем динамическую сетку в зависимости от масштаба
+    // updateGridPattern(canvas, '#ebebeb');
 
     // Глобальные границы канваса
     const globalBounds = {
-      left: -5000,  // Левая граница
-      top: -5000,   // Верхняя граница
-      right: 5000,  // Правая граница
-      bottom: 5000, // Нижняя граница
+      left: -5000,
+      top: -5000,
+      right: 5000,
+      bottom: 5000,
     };
 
     // Инициализация freeDrawingBrush
@@ -51,45 +93,7 @@ const CanvasComponent = ({ toggleDrawing, addTextTrigger, resetAddTextTrigger  }
       color: '#000',
       width: 1
     });
-
     canvas.freeDrawingBrush.width = 100;
-
-    // Функция для создания сетки с помощью pattern
-    function createGridPattern() {
-      const gridSize = 50;
-      const patternCanvas = document.createElement('canvas');
-      const patternContext = patternCanvas.getContext('2d');
-
-      // Устанавливаем размер паттерна
-      patternCanvas.width = gridSize;
-      patternCanvas.height = gridSize;
-
-      // Рисуем основные линии (светлые)
-      patternContext.strokeStyle = '#ebebeb';
-      patternContext.lineWidth = 1;
-
-      // Горизонтальная линия
-      patternContext.beginPath();
-      patternContext.moveTo(0, 0);
-      patternContext.lineTo(gridSize, 0);
-      patternContext.stroke();
-
-      // Вертикальная линия
-      patternContext.beginPath();
-      patternContext.moveTo(0, 0);
-      patternContext.lineTo(0, gridSize);
-      patternContext.stroke();
-
-      // Создаем паттерн
-      return new Pattern({
-        source: patternCanvas.toDataURL(),
-        repeat: 'repeat'
-      });
-    }
-
-    // Создаем паттерн сетки
-    const gridPattern = createGridPattern();
-    canvas.backgroundImage = gridPattern;
 
     // Добавляем объекты для примера
     const rect1 = new Rect({
@@ -119,16 +123,13 @@ const CanvasComponent = ({ toggleDrawing, addTextTrigger, resetAddTextTrigger  }
         height: globalBounds.bottom - globalBounds.top,
         fill: 'transparent',
         stroke: 'blue',
-        strokeWidth: 2, // Уменьшенный strokeWidth
+        strokeWidth: 4,
         selectable: false,
         evented: false,
       });
-
-      // Добавляем границы на канвас
       canvas.add(boundary);
     }
 
-    // Рисуем глобальные границы
     drawGlobalBounds(canvas);
 
     // Функция для ограничения панорамирования
@@ -136,45 +137,29 @@ const CanvasComponent = ({ toggleDrawing, addTextTrigger, resetAddTextTrigger  }
       const vpt = canvas.viewportTransform;
       const zoom = canvas.getZoom();
 
-      // Размеры видимой области
       const viewWidth = canvas.getWidth();
       const viewHeight = canvas.getHeight();
 
-      // Половина размеров видимой области (для центрирования)
       const halfViewWidth = viewWidth / 2 / zoom;
       const halfViewHeight = viewHeight / 2 / zoom;
 
-      // Границы с учётом половины видимой области
       const xMin = -(globalBounds.right - halfViewWidth);
       const xMax = -globalBounds.left + halfViewWidth;
       const yMin = -(globalBounds.bottom - halfViewHeight);
       const yMax = -globalBounds.top + halfViewHeight;
 
-      // Ограничиваем панорамирование
       vpt[4] = Math.min(Math.max(vpt[4], xMin * zoom), xMax * zoom);
       vpt[5] = Math.min(Math.max(vpt[5], yMin * zoom), yMax * zoom);
 
-      // Применяем ограничение
       canvas.setViewportTransform(vpt);
     }
 
-    // Функция для ограничения зума
-    function limitZoom(canvas) {
+    function updateZoomPercent(canvas) {
       const zoom = canvas.getZoom();
-
-      // Ограничиваем зумирование
-      if (zoom < ZOOM_LEVEL_MIN) {
-        canvas.setZoom(ZOOM_LEVEL_MIN);
-      } else if (zoom > ZOOM_LEVEL_MAX) {
-        canvas.setZoom(ZOOM_LEVEL_MAX);
-      }
-
-      // Ограничиваем панорамирование после изменения масштаба
-      limitPan(canvas);
-      canvas.renderAll();
+      const zoomPercentage = Math.round(zoom * 100);
+      setZoomPercent(zoomPercentage);
     }
 
-    // Функция для зума в точку
     const ZOOM_FACTOR = 1.1; // 10% увеличение/уменьшение за шаг
 
     function zoomIn(point) {
@@ -184,6 +169,7 @@ const CanvasComponent = ({ toggleDrawing, addTextTrigger, resetAddTextTrigger  }
         canvas.zoomToPoint(point, newZoom);
         limitPan(canvas);
         zoomLevelRef.current += 1;
+        updateZoomPercent(canvas);
       }
     }
 
@@ -194,22 +180,18 @@ const CanvasComponent = ({ toggleDrawing, addTextTrigger, resetAddTextTrigger  }
         canvas.zoomToPoint(point, newZoom);
         limitPan(canvas);
         zoomLevelRef.current -= 1;
+        updateZoomPercent(canvas);
       }
     }
-
 
     // Функция для подгонки канваса под размер окна
     function resizeCanvas() {
       canvas.setWidth(window.innerWidth);
       canvas.setHeight(window.innerHeight);
-      canvas.clear(); // Очистить канвас перед добавлением объектов
-
-      // Перерисовываем границы
+      canvas.renderAll();
+      // После изменения размера перерисуем сетку с учетом текущего масштаба
+      // updateGridPattern(canvas, '#b8b8b8');
       drawGlobalBounds(canvas);
-
-      // Добавляем объекты примера обратно
-      canvas.add(rect1);
-      canvas.add(rect2);
       canvas.renderAll();
     }
 
@@ -248,11 +230,9 @@ const CanvasComponent = ({ toggleDrawing, addTextTrigger, resetAddTextTrigger  }
       }
     }
 
-    // Подписываемся на события для изменения размера
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
 
-    // Обработчики событий
     const handleMouseWheel = (event) => {
       event.preventDefault();
       const delta = event.deltaY;
@@ -343,19 +323,14 @@ const CanvasComponent = ({ toggleDrawing, addTextTrigger, resetAddTextTrigger  }
       }
     };
 
-    // Обработка перетаскивания объектов за границы канваса
     const handleObjectMoving = (options) => {
       const obj = options.target;
-
-      // Получаем текущую матрицу трансформации и масштаб канваса
       const zoom = canvas.getZoom();
       const vpt = canvas.viewportTransform;
 
-      // Обновляем координаты объекта с учётом текущего масштаба
       obj.left = (obj.left - vpt[4]) / zoom;
       obj.top = (obj.top - vpt[5]) / zoom;
 
-      // Применяем обратное преобразование, чтобы объект корректно отображался
       obj.left = obj.left * zoom + vpt[4];
       obj.top = obj.top * zoom + vpt[5];
     };
@@ -370,7 +345,8 @@ const CanvasComponent = ({ toggleDrawing, addTextTrigger, resetAddTextTrigger  }
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
 
-    // Сохраняем canvas в DOM элемент для доступа при нажатии кнопки
+    updateZoomPercent(canvas);
+
     canvasElement.__canvas = canvas;
 
     return () => {
@@ -390,52 +366,89 @@ const CanvasComponent = ({ toggleDrawing, addTextTrigger, resetAddTextTrigger  }
     };
   }, []);
 
-  // Обработка включения/выключения режима рисования
-  useEffect(() => {
-    const canvasElement = canvasRef.current;
-    if (!canvasElement || !canvasElement.__canvas) return;
-    const canvas = canvasElement.__canvas;
-    canvas.isDrawingMode = toggleDrawing;
-  }, [toggleDrawing]);
-
-  useEffect(() => {
-    if (addTextTrigger) {
-      const canvas = canvasRef.current.__canvas;
-      const textbox = new Textbox("Первая строка\nВторая строка\nТретья строка", {
-        left: 100,  // Позиция текста
-        top: 100,
-        fontSize: 20,
-        fontFamily: 'Helvetica',
-        fill: 'black',
-        editable: true,
-        strokeWidth: 10,
-        backgroundColor: 'red',
-        textAlign: 'left',
-      });
-
-      textbox.setControlsVisibility({
-        mt: false, // Верхний
-        mb: false, // Нижний
-        ml: true, // Левый
-        mr: true, // Правый
-        mtr: true,  // Верхний поворотный (оставляем, если нужно)
-        bl: true,  // Нижний левый угол
-        br: true,  // Нижний правый угол
-        tl: true,  // Верхний левый угол
-        tr: true,  // Верхний правый угол
-      });
-
-      canvas.add(textbox);
-      console.log(textbox.width)
-      canvas.renderAll();
-
-      // Сбрасываем триггер после добавления текста
-      resetAddTextTrigger();
+  const handleToggleDrawing = () => {
+    if (canvasInstance) {
+      canvasInstance.isDrawingMode = !canvasInstance.isDrawingMode;
     }
-  }, [addTextTrigger, resetAddTextTrigger]);
+  };
+
+  const handleAddText = () => {
+    if (!canvasInstance) return;
+
+    const textbox = new Textbox('Введите текст', {
+      left: 100,
+      top: 100,
+      fontSize: 20,
+      minWidth: 20,
+      dynamicMinWidth: 20,
+      fill: '#aaa',
+      editable: true,
+    });
+
+    textbox.setControlsVisibility({
+      mt: false,
+      mb: false,
+      ml: true,
+      mr: true,
+      mtr: true,
+      bl: true,
+      br: true,
+      tl: true,
+      tr: true,
+    });
+
+    canvasInstance.add(textbox);
+    canvasInstance.setActiveObject(textbox);
+    canvasInstance.renderAll();
+
+    textbox.on('editing:entered', () => {
+      if (textbox.text === 'Введите текст') {
+        textbox.text = '';
+        textbox.set('fill', '#000');
+      }
+    });
+
+    textbox.on('editing:exited', () => {
+      if (textbox.text === '') {
+        textbox.text = 'Введите текст';
+        textbox.set('fill', '#aaa');
+      }
+    });
+  };
+
+  const handleZoomIn = () => {
+    const canvas = canvasRef.current.__canvas;
+    const centerPoint = new Point(canvas.getWidth() / 2, canvas.getHeight() / 2);
+    if (zoomLevelRef.current < ZOOM_LEVEL_MAX) {
+      zoomLevelRef.current++;
+      canvas.zoomToPoint(centerPoint, Math.pow(2, zoomLevelRef.current));
+      setZoomPercent(Math.round(canvas.getZoom() * 100));
+      updateGridPattern(canvas, '#ebebeb');
+    }
+  };
+
+  const handleZoomOut = () => {
+    const canvas = canvasRef.current.__canvas;
+    const centerPoint = new Point(canvas.getWidth() / 2, canvas.getHeight() / 2);
+    if (zoomLevelRef.current > ZOOM_LEVEL_MIN) {
+      zoomLevelRef.current--;
+      canvas.zoomToPoint(centerPoint, Math.pow(2, zoomLevelRef.current));
+      setZoomPercent(Math.round(canvas.getZoom() * 100));
+      updateGridPattern(canvas, '#ebebeb');
+    }
+  };
 
   return (
-      <div className="w-screen h-screen overflow-hidden" style={{ position: 'relative' }}>
+      <div className="w-screen h-screen overflow-hidden" style={{position: 'relative'}}>
+        <ZoomIndicator
+            zoomPercent={zoomPercent}
+            onZoomIn={handleZoomIn}
+            onZoomOut={handleZoomOut}
+        />
+        <LeftPanel
+            onToggleDrawing={handleToggleDrawing}
+            onAddText={handleAddText}
+        />
         <canvas
             ref={canvasRef}
             className="border-0"
