@@ -15,23 +15,22 @@ const CanvasComponent = () => {
     handleEnableTextAdding,
     handleZoomInButton,
     handleZoomOutButton,
+    handleAddFigure,
   } = useCanvasLogic();
 
   return (
       <div className="w-screen h-screen overflow-hidden" style={{ position: 'relative' }}>
-        {/* Индикатор зума */}
         <ZoomIndicator
             zoomPercent={zoomPercent}
             onZoomIn={handleZoomInButton}
             onZoomOut={handleZoomOutButton}
         />
-        {/* Левая панель с инструментами */}
         <LeftPanel
             onToggleDrawing={handleToggleDrawing}
             onAddText={handleEnableTextAdding}
             activeMode={activeMode}
+            onAddFigure={handleAddFigure}
         />
-        {/* Сам холст */}
         <canvas ref={canvasRef} className="border-0" />
       </div>
   );

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { ActiveSelection, Canvas, PencilBrush, Point, Rect, Textbox, FabricObject, Group, Triangle, Line, Control, Path, util, controlsUtils } from 'fabric/es';
+import { ActiveSelection, Canvas, PencilBrush, Point, Rect, Circle, Textbox, FabricObject, Group, Polygon, Ellipse, Triangle, Line, Control, Path, util, controlsUtils } from 'fabric/es';
 
 // =====================================
 // Константы и настройки
@@ -43,7 +43,9 @@ export function useCanvasLogic() {
     const canvasRef = useRef(null);
     const canvasInstanceRef = useRef(null);
     const isAddingTextRef = useRef(false);
+    const isAddingFigureRef = useRef(false);
     const [activeMode, setActiveMode] = useState(null);
+    const [figureType, setFigureType] = useState(null);
 
     const zoomLevelRef = useRef(0);
     const [zoomPercent, setZoomPercent] = useState(100);
@@ -72,36 +74,6 @@ export function useCanvasLogic() {
     // ============================
     // Вспомогательные функции
     // ============================
-
-    const handleSelection = (event) => {
-        const canvas = canvasInstanceRef.current;
-        const { selected } = event;
-
-        // Применяем подсветку для каждого объекта
-        selected.forEach((obj) => {
-            obj.set({
-                ...highlightStyles,
-            });
-        });
-
-        canvas.renderAll();
-    };
-
-    // Сброс подсветки при очистке выделения
-    const resetHighlight = () => {
-        const canvas = canvasInstanceRef.current;
-        const objects = canvas.getObjects();
-
-        objects.forEach((obj) => {
-            obj.set({
-                ...defaultObjectStyles,
-                hasControls: true, // Восстанавливаем контролы
-            });
-        });
-
-        canvas.renderAll();
-    };
-
 
     // Отрисовка глобальных границ
     function drawGlobalBounds(canvas) {
@@ -315,6 +287,119 @@ export function useCanvasLogic() {
             isAddingTextRef.current = false;
             setActiveMode(null);
         }
+        else if (isAddingFigureRef.current) {
+            console.log("DADADAD");
+            const pointer = canvas.getPointer(event.e);
+            switch (figureType) {
+                case "square": {
+                    const square = new Rect({
+                        left: pointer.x,
+                        top: pointer.y,
+                        width: 50,
+                        height: 50,
+                        fill: 'transparent',
+                        borderColor: 'black',
+                    });
+                    canvas.add(square);
+                    canvas.setActiveObject(square);
+                    canvas.renderAll();
+                    isAddingFigureRef.current = false;
+                    setFigureType(null);
+                }
+                break;
+                case "circle": {
+                    const circle = new Circle({
+                        left: pointer.x,
+                        top: pointer.y,
+                        radius: 50,
+                        fill: 'transparent',
+                        borderColor: 'black',
+                    });
+                    canvas.add(circle);
+                    canvas.setActiveObject(circle);
+                    canvas.renderAll();
+                    isAddingFigureRef.current = false;
+                    setFigureType(null);
+                }
+                break;
+                case "ellipse": {
+                    const ellipse = new Ellipse({
+                        left: pointer.x,
+                        top: pointer.y,
+                        rx: 100,
+                        ry: 50,
+                    });
+                    canvas.add(ellipse);
+                    canvas.setActiveObject(ellipse);
+                    canvas.renderAll();
+                    isAddingFigureRef.current = false;
+                    setFigureType(null);
+                }
+                break;
+                case "rhombus": {
+                    let points = [
+                        {x: pointer.x, y: pointer.y - 50},  // Верхняя вершина
+                        {x: pointer.x + 50, y: pointer.y}, // Правая вершина
+                        {x: pointer.x, y: pointer.y + 50}, // Нижняя вершина
+                        {x: pointer.x - 50, y: pointer.y}   // Левая вершина
+                    ];
+
+                    let rhombus = new Polygon(points, {
+                        fill: 'transparent',
+                        stroke: 'black',
+                        strokeWidth: 1,
+                    });
+                    canvas.add(rhombus);
+                    canvas.setActiveObject(rhombus);
+                    canvas.renderAll();
+                    isAddingFigureRef.current = false;
+                    setFigureType(null);
+                }
+                break;
+                case "star": {
+                    let starPoints = [
+                        { x: pointer.x, y: pointer.y - 50 },   // Вершина 1
+                        { x: pointer.x + 11, y: pointer.y - 15 },  // Вершина 2
+                        { x: pointer.x + 48, y: pointer.y - 15 },  // Вершина 3
+                        { x: pointer.x + 34, y: pointer.y + 7 },  // Вершина 4
+                        { x: pointer.x + 39, y: pointer.y + 41 },  // Вершина 5
+                        { x: pointer.x, y: pointer.y + 20 },  // Вершина 6
+                        { x: pointer.x - 39, y: pointer.y + 41 },  // Вершина 7
+                        { x: pointer.x - 34, y: pointer.y + 7 },  // Вершина 8
+                        { x: pointer.x - 48, y: pointer.y - 15 },   // Вершина 9
+                        { x: pointer.x - 11, y: pointer.y - 15 }  // Вершина 10
+                    ];
+
+                    let star = new Polygon(starPoints, {
+                        fill: 'transparent',
+                        stroke: 'black',
+                        strokeWidth: 1,
+                    });
+                    canvas.add(star);
+                    canvas.setActiveObject(star);
+                    canvas.renderAll();
+                    isAddingFigureRef.current = false;
+                    setFigureType(null);
+                }
+                break;
+                case "triangle": {
+                    const triangle = new Triangle({
+                        left: pointer.x,
+                        top: pointer.y,
+                        width: 50,
+                        height: 50,
+                        fill: 'transparent',
+                        borderColor: 'black',
+                    });
+                    canvas.add(triangle);
+                    canvas.setActiveObject(triangle);
+                    canvas.renderAll();
+                    isAddingFigureRef.current = false;
+                    setFigureType(null);
+                }
+                break;
+            }
+        }
     };
 
     // Движение мыши при панорамировании
@@ -428,6 +513,41 @@ export function useCanvasLogic() {
         canvas.add(rect1);
         canvas.add(rect2);
 
+        const starPoints = [
+            { x: 50, y: 0 },
+            { x: 61, y: 35 },
+            { x: 98, y: 35 },
+            { x: 68, y: 57 },
+            { x: 79, y: 91 },
+            { x: 50, y: 70 },
+            { x: 21, y: 91 },
+            { x: 32, y: 57 },
+            { x: 2, y: 35 },
+            { x: 39, y: 35 },
+        ];
+
+        const star = new Polygon(starPoints, {
+            left: 100,
+            top: 100,
+            fill: 'yellow',
+            stroke: 'black',
+            strokeWidth: 2
+        });
+
+        canvas.add(star);
+
+        const diamondWithRect = new Rect({
+            left: 200,
+            top: 200,
+            fill: 'cyan',
+            width: 100,
+            height: 100,
+            angle: 45
+        });
+
+        canvas.add(diamondWithRect);
+
+
         drawGlobalBounds(canvas);
         const boundary = canvas.getObjects().find((obj) => obj.stroke === 'blue');
         if (boundary) {
@@ -507,6 +627,19 @@ export function useCanvasLogic() {
         }
     };
 
+    const handleAddFigure = (figureType) => {
+        const canvas = canvasInstanceRef.current;
+        if (canvas) {
+            setFigureType(figureType);
+            isAddingFigureRef.current = true;
+            console.log('isAddingFigureRef:', isAddingFigureRef.current);
+            canvas.isDrawingMode = false;
+            canvas.selection = true;
+            isAddingTextRef.current = false;
+            setActiveMode("figureAdding");
+        }
+    }
+
     const handleZoomInButton = () => {
         const canvas = canvasInstanceRef.current;
         if (!canvas) return;
@@ -549,5 +682,6 @@ export function useCanvasLogic() {
         handleEnableTextAdding,
         handleZoomInButton,
         handleZoomOutButton,
+        handleAddFigure,
     };
 }
