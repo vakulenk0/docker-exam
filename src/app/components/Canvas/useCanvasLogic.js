@@ -15,10 +15,9 @@ Canvas.ActiveSelection = ActiveSelection;
 const defaultObjectStyles = {
     borderColor: '#374151',
     cornerColor: '#1f2937',
-    cornerStrokeColor: 'black',
+    cornerStrokeColor: '#627ca1',
     cornerSize: 10,
     transparentCorners: false,
-    cornerStyle: 'circle',
     padding: 0,
     borderScaleFactor: 1,
 };
@@ -45,7 +44,7 @@ export function useCanvasLogic() {
     const isAddingTextRef = useRef(false);
     const isAddingFigureRef = useRef(false);
     const [activeMode, setActiveMode] = useState(null);
-    const [figureType, setFigureType] = useState(null);
+    const figureTypeRef = useRef(null);
 
     const zoomLevelRef = useRef(0);
     const [zoomPercent, setZoomPercent] = useState(100);
@@ -75,7 +74,6 @@ export function useCanvasLogic() {
     // Вспомогательные функции
     // ============================
 
-    // Отрисовка глобальных границ
     function drawGlobalBounds(canvas) {
         const boundary = new Rect({
             left: globalBounds.left,
@@ -91,7 +89,6 @@ export function useCanvasLogic() {
         canvas.add(boundary);
     }
 
-    // Ограничение панорамирования
     function limitPan(canvas) {
         const vpt = canvas.viewportTransform;
         const zoom = canvas.getZoom();
@@ -113,14 +110,12 @@ export function useCanvasLogic() {
         canvas.setViewportTransform(vpt);
     }
 
-    // Обновление процента зума
     function updateZoomPercent(canvas) {
         const zoom = canvas.getZoom();
         const zoomPercentage = Math.round(zoom * 100);
         setZoomPercent(zoomPercentage);
     }
 
-    // Зумирование внутрь
     function zoomIn(point) {
         const canvas = canvasInstanceRef.current;
         const currentZoom = canvas.getZoom();
@@ -133,7 +128,6 @@ export function useCanvasLogic() {
         }
     }
 
-    // Зумирование наружу
     function zoomOut(point) {
         const canvas = canvasInstanceRef.current;
         const currentZoom = canvas.getZoom();
@@ -146,7 +140,6 @@ export function useCanvasLogic() {
         }
     }
 
-    // Анимация инерции панорамирования
     function animateInertia() {
         const canvas = canvasInstanceRef.current;
         const { x, y } = velocityRef.current;
@@ -164,7 +157,6 @@ export function useCanvasLogic() {
         inertiaRequestIdRef.current = requestAnimationFrame(animateInertia);
     }
 
-    // Запуск инерции
     function startInertia() {
         if (inertiaRequestIdRef.current) {
             cancelAnimationFrame(inertiaRequestIdRef.current);
@@ -172,19 +164,24 @@ export function useCanvasLogic() {
         inertiaRequestIdRef.current = requestAnimationFrame(animateInertia);
     }
 
-    // Удаление выбранных объектов
+    // Исправляем функцию удаления:
+    // Теперь если выделение множественное (ActiveSelection), удалим все объекты из него.
     function deleteSelectedObjects() {
         const currentCanvas = canvasInstanceRef.current;
         if (!currentCanvas) return;
         const activeObjects = currentCanvas.getActiveObjects();
         if (activeObjects.length) {
-            activeObjects.forEach((obj) => currentCanvas.remove(obj));
+            const selection = currentCanvas.getActiveObject();
+            if (selection && selection.type === 'activeSelection') {
+                selection.forEachObject(obj => currentCanvas.remove(obj));
+            } else {
+                activeObjects.forEach((obj) => currentCanvas.remove(obj));
+            }
             currentCanvas.discardActiveObject();
             currentCanvas.renderAll();
         }
     }
 
-    // Ресайз холста под окно
     function resizeCanvas() {
         const canvas = canvasInstanceRef.current;
         if (!canvas) return;
@@ -195,12 +192,10 @@ export function useCanvasLogic() {
         canvas.renderAll();
     }
 
-
     // ============================
     // Обработчики событий
     // ============================
 
-    // Колёсико мыши для зума
     const handleMouseWheel = (event) => {
         event.preventDefault();
         const canvas = canvasInstanceRef.current;
@@ -214,7 +209,6 @@ export function useCanvasLogic() {
         }
     };
 
-    // Нажатие средней кнопки мыши для панорамирования
     const handleMouseDown = (event) => {
         const canvas = canvasInstanceRef.current;
         if (event.button === 1 && !canvas.isDrawingMode) {
@@ -238,7 +232,6 @@ export function useCanvasLogic() {
         }
     };
 
-    // Добавление текста при клике
     const handleCanvasMouseDown = (event) => {
         const canvas = canvasInstanceRef.current;
         if (isAddingTextRef.current) {
@@ -251,6 +244,8 @@ export function useCanvasLogic() {
                 dynamicMinWidth: 20,
                 fill: '#aaa',
                 editable: true,
+                originX: 'center',
+                originY: 'center',
                 ...defaultObjectStyles,
             });
 
@@ -288,121 +283,142 @@ export function useCanvasLogic() {
             setActiveMode(null);
         }
         else if (isAddingFigureRef.current) {
-            console.log("DADADAD");
             const pointer = canvas.getPointer(event.e);
-            switch (figureType) {
+            switch (figureTypeRef.current) {
                 case "square": {
                     const square = new Rect({
                         left: pointer.x,
                         top: pointer.y,
-                        width: 50,
-                        height: 50,
+                        width: 100,
+                        height: 100,
                         fill: 'transparent',
-                        borderColor: 'black',
+                        stroke: 'black',
+                        strokeWidth: 1,
+                        originX: 'center',
+                        originY: 'center',
+                        ...defaultObjectStyles,
                     });
                     canvas.add(square);
                     canvas.setActiveObject(square);
-                    canvas.renderAll();
-                    isAddingFigureRef.current = false;
-                    setFigureType(null);
                 }
-                break;
+                    break;
+
                 case "circle": {
                     const circle = new Circle({
                         left: pointer.x,
                         top: pointer.y,
                         radius: 50,
                         fill: 'transparent',
-                        borderColor: 'black',
+                        stroke: 'black',
+                        strokeWidth: 1,
+                        originX: 'center',
+                        originY: 'center',
+                        ...defaultObjectStyles,
                     });
                     canvas.add(circle);
                     canvas.setActiveObject(circle);
-                    canvas.renderAll();
-                    isAddingFigureRef.current = false;
-                    setFigureType(null);
                 }
-                break;
+                    break;
+
                 case "ellipse": {
                     const ellipse = new Ellipse({
                         left: pointer.x,
                         top: pointer.y,
                         rx: 100,
                         ry: 50,
+                        fill: 'transparent',
+                        stroke: 'black',
+                        strokeWidth: 1,
+                        originX: 'center',
+                        originY: 'center',
+                        ...defaultObjectStyles,
                     });
                     canvas.add(ellipse);
                     canvas.setActiveObject(ellipse);
-                    canvas.renderAll();
-                    isAddingFigureRef.current = false;
-                    setFigureType(null);
                 }
-                break;
+                    break;
+
                 case "rhombus": {
                     let points = [
-                        {x: pointer.x, y: pointer.y - 50},  // Верхняя вершина
-                        {x: pointer.x + 50, y: pointer.y}, // Правая вершина
-                        {x: pointer.x, y: pointer.y + 50}, // Нижняя вершина
-                        {x: pointer.x - 50, y: pointer.y}   // Левая вершина
+                        {x: pointer.x, y: pointer.y - 50},
+                        {x: pointer.x + 50, y: pointer.y},
+                        {x: pointer.x, y: pointer.y + 50},
+                        {x: pointer.x - 50, y: pointer.y}
                     ];
 
                     let rhombus = new Polygon(points, {
                         fill: 'transparent',
                         stroke: 'black',
                         strokeWidth: 1,
+                        originX: 'center',
+                        originY: 'center',
+                        ...defaultObjectStyles,
                     });
                     canvas.add(rhombus);
                     canvas.setActiveObject(rhombus);
-                    canvas.renderAll();
-                    isAddingFigureRef.current = false;
-                    setFigureType(null);
                 }
-                break;
+                    break;
+
                 case "star": {
-                    let starPoints = [
-                        { x: pointer.x, y: pointer.y - 50 },   // Вершина 1
-                        { x: pointer.x + 11, y: pointer.y - 15 },  // Вершина 2
-                        { x: pointer.x + 48, y: pointer.y - 15 },  // Вершина 3
-                        { x: pointer.x + 34, y: pointer.y + 7 },  // Вершина 4
-                        { x: pointer.x + 39, y: pointer.y + 41 },  // Вершина 5
-                        { x: pointer.x, y: pointer.y + 20 },  // Вершина 6
-                        { x: pointer.x - 39, y: pointer.y + 41 },  // Вершина 7
-                        { x: pointer.x - 34, y: pointer.y + 7 },  // Вершина 8
-                        { x: pointer.x - 48, y: pointer.y - 15 },   // Вершина 9
-                        { x: pointer.x - 11, y: pointer.y - 15 }  // Вершина 10
-                    ];
+                    const createStarPoints = (centerX, centerY, outerRadius, innerRadius, numPoints) => {
+                        const points = [];
+                        const angleStep = Math.PI / numPoints;
+
+                        for (let i = 0; i < 2 * numPoints; i++) {
+                            const radius = i % 2 === 0 ? outerRadius : innerRadius;
+                            const angle = i * angleStep - Math.PI / 2;
+                            points.push({
+                                x: centerX + radius * Math.cos(angle),
+                                y: centerY + radius * Math.sin(angle),
+                            });
+                        }
+                        return points;
+                    };
+
+                    const starPoints = createStarPoints(pointer.x, pointer.y, 50, 20, 5);
 
                     let star = new Polygon(starPoints, {
                         fill: 'transparent',
                         stroke: 'black',
                         strokeWidth: 1,
+                        originX: 'center',
+                        originY: 'center',
+                        ...defaultObjectStyles,
                     });
                     canvas.add(star);
                     canvas.setActiveObject(star);
-                    canvas.renderAll();
-                    isAddingFigureRef.current = false;
-                    setFigureType(null);
                 }
-                break;
+                    break;
+
                 case "triangle": {
                     const triangle = new Triangle({
                         left: pointer.x,
                         top: pointer.y,
-                        width: 50,
-                        height: 50,
+                        width: 100,
+                        height: 100,
                         fill: 'transparent',
-                        borderColor: 'black',
+                        stroke: 'black',
+                        strokeWidth: 1,
+                        originX: 'center',
+                        originY: 'center',
+                        ...defaultObjectStyles,
                     });
                     canvas.add(triangle);
                     canvas.setActiveObject(triangle);
-                    canvas.renderAll();
-                    isAddingFigureRef.current = false;
-                    setFigureType(null);
                 }
-                break;
+                    break;
+
+                default:
+                    console.warn("Unknown figure type:", figureTypeRef.current);
             }
+            canvas.renderAll();
+            isAddingFigureRef.current = false;
+            figureTypeRef.current = null;
+            // После добавления фигуры сбрасываем режим
+            setActiveMode(null);
         }
     };
 
-    // Движение мыши при панорамировании
     const handleMouseMove = (event) => {
         const canvas = canvasInstanceRef.current;
         if (panningActiveRef.current && mouseDownPointRef.current && !canvas.isDrawingMode) {
@@ -419,7 +435,6 @@ export function useCanvasLogic() {
         }
     };
 
-    // Отпускание средней кнопки мыши и запуск инерции
     const handleMouseUp = (event) => {
         const canvas = canvasInstanceRef.current;
         if (event.button === 1 && !canvas.isDrawingMode) {
@@ -445,7 +460,6 @@ export function useCanvasLogic() {
         }
     };
 
-    // Нажатия клавиш
     const handleKeyDown = (event) => {
         if (event.key === 'Control') {
             ctrlPressedRef.current = true;
@@ -460,7 +474,6 @@ export function useCanvasLogic() {
         }
     };
 
-    // Перемещение объектов
     const handleObjectMoving = (options) => {
         const canvas = canvasInstanceRef.current;
         const obj = options.target;
@@ -474,11 +487,7 @@ export function useCanvasLogic() {
         obj.top = obj.top * zoom + vpt[5];
     };
 
-    // ============================
-    // Инициализация и размонтирование
-    // ============================
     useEffect(() => {
-        // Инициализация canvas
         const canvasElement = canvasRef.current;
         const canvas = new Canvas(canvasElement, {
             selectionKey: 'ctrlKey',
@@ -487,14 +496,12 @@ export function useCanvasLogic() {
 
         canvasInstanceRef.current = canvas;
 
-        // Настройка рисования карандашом
         canvas.freeDrawingBrush = new PencilBrush(canvas, {
             color: '#000',
             width: 1,
         });
         canvas.freeDrawingBrush.width = 100;
 
-        // Примерные объекты на холсте
         const rect1 = new Rect({
             left: 0,
             top: 0,
@@ -547,7 +554,6 @@ export function useCanvasLogic() {
 
         canvas.add(diamondWithRect);
 
-
         drawGlobalBounds(canvas);
         const boundary = canvas.getObjects().find((obj) => obj.stroke === 'blue');
         if (boundary) {
@@ -557,13 +563,11 @@ export function useCanvasLogic() {
         resizeCanvas();
         window.addEventListener('resize', resizeCanvas);
 
-        // События для mouse wheel зума и панорамирования
         canvas.wrapperEl.addEventListener('wheel', handleMouseWheel, { passive: false });
         canvas.wrapperEl.addEventListener('mousedown', handleMouseDown);
         canvas.wrapperEl.addEventListener('mousemove', handleMouseMove);
         canvas.wrapperEl.addEventListener('mouseup', handleMouseUp);
 
-        // События canvas
         canvas.on('mouse:down', handleCanvasMouseDown);
         canvas.on('object:moving', handleObjectMoving);
         canvas.on('object:moving', (e) => {
@@ -573,23 +577,17 @@ export function useCanvasLogic() {
             e.target.hasControls = true;
         });
 
-        // События клавиатуры
         window.addEventListener('keydown', handleKeyDown, true);
         window.addEventListener('keyup', handleKeyUp);
-
         updateZoomPercent(canvas);
         canvasElement.__canvas = canvas;
 
-        // Очистка при размонтировании
         return () => {
             canvas.wrapperEl.removeEventListener('wheel', handleMouseWheel);
             canvas.wrapperEl.removeEventListener('mousedown', handleMouseDown);
             canvas.wrapperEl.removeEventListener('mousemove', handleMouseMove);
             canvas.wrapperEl.removeEventListener('mouseup', handleMouseUp);
             canvas.off('mouse:down', handleCanvasMouseDown);
-            canvas.off('selection:created', handleSelection);
-            canvas.off('selection:updated', handleSelection);
-            canvas.off('selection:cleared', resetHighlight);
 
             window.removeEventListener('keydown', handleKeyDown, true);
             window.removeEventListener('keyup', handleKeyUp);
@@ -602,12 +600,16 @@ export function useCanvasLogic() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // ============================
-    // Публичные методы
-    // ============================
+    const disableFigureMode = () => {
+        isAddingFigureRef.current = false;
+        figureTypeRef.current = null;
+        setActiveMode(null);
+    };
+
     const handleToggleDrawing = () => {
         const canvas = canvasInstanceRef.current;
         if (canvas) {
+            disableFigureMode();
             isAddingTextRef.current = false;
             setActiveMode((prevMode) => {
                 const isDrawing = prevMode === 'drawing';
@@ -620,19 +622,25 @@ export function useCanvasLogic() {
     const handleEnableTextAdding = () => {
         const canvas = canvasInstanceRef.current;
         if (canvas) {
-            canvas.defaultCursor = "text"
-            canvas.isDrawingMode = false;
-            setActiveMode('textAdding');
-            isAddingTextRef.current = true;
+            if (activeMode === 'textAdding') {
+                canvas.defaultCursor = 'default';
+                isAddingTextRef.current = false;
+                setActiveMode(null);
+            } else {
+                canvas.defaultCursor = "text";
+                canvas.isDrawingMode = false;
+                isAddingTextRef.current = true;
+                isAddingFigureRef.current = false;
+                setActiveMode('textAdding');
+            }
         }
     };
 
     const handleAddFigure = (figureType) => {
         const canvas = canvasInstanceRef.current;
         if (canvas) {
-            setFigureType(figureType);
+            figureTypeRef.current = figureType;
             isAddingFigureRef.current = true;
-            console.log('isAddingFigureRef:', isAddingFigureRef.current);
             canvas.isDrawingMode = false;
             canvas.selection = true;
             isAddingTextRef.current = false;
@@ -644,15 +652,14 @@ export function useCanvasLogic() {
         const canvas = canvasInstanceRef.current;
         if (!canvas) return;
 
-        const zoom = canvas.getZoom(); // Текущий зум
+        const zoom = canvas.getZoom();
         const newZoom = zoom * ZOOM_FACTOR;
 
-        if (newZoom > Math.pow(2, ZOOM_LEVEL_MAX)) return; // Проверка на максимальный зум
+        if (newZoom > Math.pow(2, ZOOM_LEVEL_MAX)) return;
 
-        const center = canvas.getCenter(); // Центр холста в координатах системы
-        canvas.zoomToPoint(new Point(center.left, center.top), newZoom); // Зум к центру
-
-        zoomLevelRef.current = Math.log2(newZoom); // Обновляем текущий уровень зума
+        const center = canvas.getCenter();
+        canvas.zoomToPoint(new Point(center.left, center.top), newZoom);
+        zoomLevelRef.current = Math.log2(newZoom);
         setZoomPercent(Math.round(newZoom * 100));
         canvas.renderAll();
     };
@@ -664,12 +671,11 @@ export function useCanvasLogic() {
         const zoom = canvas.getZoom();
         const newZoom = zoom / ZOOM_FACTOR;
 
-        if (newZoom < Math.pow(2, ZOOM_LEVEL_MIN)) return; // Проверка на минимальный зум
+        if (newZoom < Math.pow(2, ZOOM_LEVEL_MIN)) return;
 
-        const center = canvas.getCenter(); // Центр холста в координатах системы
-        canvas.zoomToPoint(new Point(center.left, center.top), newZoom); // Зум к центру
-
-        zoomLevelRef.current = Math.log2(newZoom); // Обновляем текущий уровень зума
+        const center = canvas.getCenter();
+        canvas.zoomToPoint(new Point(center.left, center.top), newZoom);
+        zoomLevelRef.current = Math.log2(newZoom);
         setZoomPercent(Math.round(newZoom * 100));
         canvas.renderAll();
     };
