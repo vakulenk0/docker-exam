@@ -1,16 +1,26 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { ActiveSelection, Canvas, PencilBrush, Point, Rect, Circle, Textbox, FabricObject, Group, Polygon, Ellipse, Triangle, Line, Control, Path, util, controlsUtils } from 'fabric/es';
+import {
+    ActiveSelection,
+    Canvas,
+    PencilBrush,
+    Point,
+    Rect,
+    Circle,
+    Textbox,
+    FabricObject,
+    Polygon,
+    Ellipse,
+    Triangle,
+    util,
+    loadSVGFromString,
+    Image, FabricImage,
+} from 'fabric';
 
-// =====================================
-// Константы и настройки
-// =====================================
-const ZOOM_LEVEL_MIN = -5;
+const ZOOM_LEVEL_MIN = -3;
 const ZOOM_LEVEL_MAX = 3;
 const ZOOM_FACTOR = 1.1;
-
-Canvas.ActiveSelection = ActiveSelection;
 
 const defaultObjectStyles = {
     borderColor: '#374151',
@@ -20,31 +30,23 @@ const defaultObjectStyles = {
     transparentCorners: false,
     padding: 0,
     borderScaleFactor: 1,
+    selectable: true,
+    evented: true,
 };
 
-// Настройки выделения для ActiveSelection
-ActiveSelection.ownDefaults = {
-    ...defaultObjectStyles,
-};
-
-// Настройки выделения для остальных объектов
 FabricObject.ownDefaults = {
     ...defaultObjectStyles,
 };
 
-// =====================================
-// Хук useCanvasLogic
-// =====================================
 export function useCanvasLogic() {
-    // ============================
-    // Рефы и стейт
-    // ============================
     const canvasRef = useRef(null);
     const canvasInstanceRef = useRef(null);
+
     const isAddingTextRef = useRef(false);
     const isAddingFigureRef = useRef(false);
-    const [activeMode, setActiveMode] = useState(null);
     const figureTypeRef = useRef(null);
+
+    const [activeMode, setActiveMode] = useState(null);
 
     const zoomLevelRef = useRef(0);
     const [zoomPercent, setZoomPercent] = useState(100);
@@ -59,10 +61,78 @@ export function useCanvasLogic() {
 
     const inertiaRequestIdRef = useRef(null);
     const velocityRef = useRef({ x: 0, y: 0 });
-
     const ctrlPressedRef = useRef(false);
 
-    // Глобальные границы холста
+    const clipboardRef = useRef(null); // Оставляем ref
+
+    const handleCopy = async () => {
+        const canvas = canvasInstanceRef.current;
+        if (!canvas) return;
+
+        const activeObject = canvas.getActiveObject();
+        if (!activeObject) {
+            console.warn('No active object to copy');
+            return;
+        }
+
+        const cloned = await activeObject.clone();
+        clipboardRef.current = cloned;
+        console.log('Copied to clipboard:', clipboardRef.current);
+    };
+
+
+    const handlePaste = async () => {
+        const canvas = canvasInstanceRef.current;
+        if (!canvas || !clipboardRef.current) {
+            console.warn('Clipboard is empty or canvas not initialized');
+            return;
+        }
+
+        try {
+            const clonedObj = await clipboardRef.current.clone();
+
+            // Устанавливаем смещение
+            clonedObj.left += 10;
+            clonedObj.top += 10;
+
+            // Устанавливаем стили выделения
+            clonedObj.set({
+                borderColor: '#374151', // Ваш стиль для границы
+                cornerColor: '#1f2937', // Цвет углов
+                cornerStrokeColor: '#627ca1', // Цвет рамки углов
+                cornerSize: 10, // Размер углов
+                transparentCorners: false, // Прозрачные углы
+                evented: true, // Объект должен быть интерактивным
+            });
+
+            // Обработка ActiveSelection
+            if (clonedObj instanceof ActiveSelection) {
+                clonedObj.canvas = canvas;
+                clonedObj.forEachObject((obj) => {
+                    obj.set({
+                        borderColor: '#374151',
+                        cornerColor: '#1f2937',
+                        cornerStrokeColor: '#627ca1',
+                        cornerSize: 10,
+                        transparentCorners: false,
+                        evented: true,
+                    });
+                    canvas.add(obj);
+                });
+                clonedObj.setCoords();
+            } else {
+                canvas.add(clonedObj);
+            }
+
+            canvas.setActiveObject(clonedObj);
+            canvas.requestRenderAll();
+
+            console.log('Pasted from clipboard:', clonedObj);
+        } catch (error) {
+            console.error('Error during paste:', error);
+        }
+    };
+
     const globalBounds = {
         left: -5000,
         top: -5000,
@@ -70,12 +140,12 @@ export function useCanvasLogic() {
         bottom: 5000,
     };
 
-    // ============================
-    // Вспомогательные функции
-    // ============================
+    let boundary = null;
 
     function drawGlobalBounds(canvas) {
-        const boundary = new Rect({
+        if (boundary) return;
+
+        boundary = new Rect({
             left: globalBounds.left,
             top: globalBounds.top,
             width: globalBounds.right - globalBounds.left,
@@ -86,8 +156,11 @@ export function useCanvasLogic() {
             selectable: false,
             evented: false,
         });
+
         canvas.add(boundary);
+        canvas.sendObjectToBack(boundary);
     }
+
 
     function limitPan(canvas) {
         const vpt = canvas.viewportTransform;
@@ -157,6 +230,104 @@ export function useCanvasLogic() {
         inertiaRequestIdRef.current = requestAnimationFrame(animateInertia);
     }
 
+    const createFigure = (type, pointer) => {
+        const commonProps = {
+            left: pointer.x,
+            top: pointer.y,
+            fill: 'transparent',
+            stroke: 'black',
+            strokeWidth: 1,
+            originX: 'center',
+            originY: 'center',
+            ...defaultObjectStyles,
+        };
+
+        switch (type) {
+            case 'circle':
+                return new Circle({ ...commonProps, radius: 50 });
+            case 'square':
+                return new Rect({ ...commonProps, width: 100, height: 100 });
+            case 'ellipse':
+                return new Ellipse({ ...commonProps, rx: 100, ry: 50 });
+            case 'triangle':
+                return new Triangle({ ...commonProps, width: 100, height: 100 });
+            case 'rhombus': {
+                const points = [
+                    { x: pointer.x, y: pointer.y - 50 },
+                    { x: pointer.x + 50, y: pointer.y },
+                    { x: pointer.x, y: pointer.y + 50 },
+                    { x: pointer.x - 50, y: pointer.y },
+                ];
+                return new Polygon(points, { ...commonProps });
+            }
+            case 'star': {
+                const createStarPoints = (centerX, centerY, outerRadius, innerRadius, numPoints) => {
+                    const points = [];
+                    const angleStep = Math.PI / numPoints;
+                    for (let i = 0; i < 2 * numPoints; i++) {
+                        const radius = i % 2 === 0 ? outerRadius : innerRadius;
+                        const angle = i * angleStep - Math.PI / 2;
+                        points.push({
+                            x: centerX + radius * Math.cos(angle),
+                            y: centerY + radius * Math.sin(angle),
+                        });
+                    }
+                    return points;
+                };
+                const starPoints = createStarPoints(pointer.x, pointer.y, 50, 20, 5);
+                return new Polygon(starPoints, { ...commonProps });
+            }
+            default:
+                console.warn('Unknown figure type:', type);
+                return null;
+        }
+    };
+
+
+    const createTextbox = (pointer) => {
+        const textbox = new Textbox('Введите текст', {
+            left: pointer.x,
+            top: pointer.y,
+            fontSize: 20,
+            minWidth: 20,
+            dynamicMinWidth: 20,
+            fill: '#aaa',
+            editable: true,
+            originX: 'center',
+            originY: 'center',
+            ...defaultObjectStyles,
+        });
+
+        textbox.setControlsVisibility({
+            mt: false,
+            mb: false,
+            ml: true,
+            mr: true,
+            mtr: true,
+            bl: true,
+            br: true,
+            tl: true,
+            tr: true,
+        });
+
+        textbox.on('editing:entered', () => {
+            if (textbox.text === 'Введите текст') {
+                textbox.text = '';
+                textbox.set('fill', '#000');
+            }
+        });
+
+        textbox.on('editing:exited', () => {
+            if (textbox.text === '') {
+                textbox.text = 'Введите текст';
+                textbox.set('fill', '#aaa');
+            }
+        });
+
+        return textbox;
+    };
+
+
     function startInertia() {
         if (inertiaRequestIdRef.current) {
             cancelAnimationFrame(inertiaRequestIdRef.current);
@@ -164,37 +335,17 @@ export function useCanvasLogic() {
         inertiaRequestIdRef.current = requestAnimationFrame(animateInertia);
     }
 
-    // Исправляем функцию удаления:
-    // Теперь если выделение множественное (ActiveSelection), удалим все объекты из него.
-    function deleteSelectedObjects() {
-        const currentCanvas = canvasInstanceRef.current;
-        if (!currentCanvas) return;
-        const activeObjects = currentCanvas.getActiveObjects();
-        if (activeObjects.length) {
-            const selection = currentCanvas.getActiveObject();
-            if (selection && selection.type === 'activeSelection') {
-                selection.forEachObject(obj => currentCanvas.remove(obj));
-            } else {
-                activeObjects.forEach((obj) => currentCanvas.remove(obj));
-            }
-            currentCanvas.discardActiveObject();
-            currentCanvas.renderAll();
-        }
-    }
-
     function resizeCanvas() {
         const canvas = canvasInstanceRef.current;
         if (!canvas) return;
+
         canvas.setWidth(window.innerWidth);
         canvas.setHeight(window.innerHeight);
-        canvas.renderAll();
+
         drawGlobalBounds(canvas);
         canvas.renderAll();
     }
 
-    // ============================
-    // Обработчики событий
-    // ============================
 
     const handleMouseWheel = (event) => {
         event.preventDefault();
@@ -211,9 +362,11 @@ export function useCanvasLogic() {
 
     const handleMouseDown = (event) => {
         const canvas = canvasInstanceRef.current;
+        // Средняя кнопка мыши - панорамирование
         if (event.button === 1 && !canvas.isDrawingMode) {
             event.preventDefault();
             canvas.defaultCursor = 'grabbing';
+            // ИЗМЕНЕНО: Во время панорамирования отключаем выбор, потом вернём
             canvas.selection = false;
             panningActiveRef.current = true;
             const pointer = canvas.getPointer(event, true);
@@ -234,188 +387,34 @@ export function useCanvasLogic() {
 
     const handleCanvasMouseDown = (event) => {
         const canvas = canvasInstanceRef.current;
+        if (!canvas) return;
+
+        const pointer = canvas.getPointer(event.e);
+
+        // Добавление текста
         if (isAddingTextRef.current) {
-            const pointer = canvas.getPointer(event.e);
-            const textbox = new Textbox('Введите текст', {
-                left: pointer.x,
-                top: pointer.y,
-                fontSize: 20,
-                minWidth: 20,
-                dynamicMinWidth: 20,
-                fill: '#aaa',
-                editable: true,
-                originX: 'center',
-                originY: 'center',
-                ...defaultObjectStyles,
-            });
-
-            textbox.setControlsVisibility({
-                mt: false,
-                mb: false,
-                ml: true,
-                mr: true,
-                mtr: true,
-                bl: true,
-                br: true,
-                tl: true,
-                tr: true,
-            });
-
+            const textbox = createTextbox(pointer);
             canvas.add(textbox);
             canvas.setActiveObject(textbox);
             canvas.renderAll();
 
-            textbox.on('editing:entered', () => {
-                if (textbox.text === 'Введите текст') {
-                    textbox.text = '';
-                    textbox.set('fill', '#000');
-                }
-            });
-
-            textbox.on('editing:exited', () => {
-                if (textbox.text === '') {
-                    textbox.text = 'Введите текст';
-                    textbox.set('fill', '#aaa');
-                }
-            });
-
             isAddingTextRef.current = false;
             setActiveMode(null);
+            return;
         }
-        else if (isAddingFigureRef.current) {
-            const pointer = canvas.getPointer(event.e);
-            switch (figureTypeRef.current) {
-                case "square": {
-                    const square = new Rect({
-                        left: pointer.x,
-                        top: pointer.y,
-                        width: 100,
-                        height: 100,
-                        fill: 'transparent',
-                        stroke: 'black',
-                        strokeWidth: 1,
-                        originX: 'center',
-                        originY: 'center',
-                        ...defaultObjectStyles,
-                    });
-                    canvas.add(square);
-                    canvas.setActiveObject(square);
-                }
-                    break;
 
-                case "circle": {
-                    const circle = new Circle({
-                        left: pointer.x,
-                        top: pointer.y,
-                        radius: 50,
-                        fill: 'transparent',
-                        stroke: 'black',
-                        strokeWidth: 1,
-                        originX: 'center',
-                        originY: 'center',
-                        ...defaultObjectStyles,
-                    });
-                    canvas.add(circle);
-                    canvas.setActiveObject(circle);
-                }
-                    break;
-
-                case "ellipse": {
-                    const ellipse = new Ellipse({
-                        left: pointer.x,
-                        top: pointer.y,
-                        rx: 100,
-                        ry: 50,
-                        fill: 'transparent',
-                        stroke: 'black',
-                        strokeWidth: 1,
-                        originX: 'center',
-                        originY: 'center',
-                        ...defaultObjectStyles,
-                    });
-                    canvas.add(ellipse);
-                    canvas.setActiveObject(ellipse);
-                }
-                    break;
-
-                case "rhombus": {
-                    let points = [
-                        {x: pointer.x, y: pointer.y - 50},
-                        {x: pointer.x + 50, y: pointer.y},
-                        {x: pointer.x, y: pointer.y + 50},
-                        {x: pointer.x - 50, y: pointer.y}
-                    ];
-
-                    let rhombus = new Polygon(points, {
-                        fill: 'transparent',
-                        stroke: 'black',
-                        strokeWidth: 1,
-                        originX: 'center',
-                        originY: 'center',
-                        ...defaultObjectStyles,
-                    });
-                    canvas.add(rhombus);
-                    canvas.setActiveObject(rhombus);
-                }
-                    break;
-
-                case "star": {
-                    const createStarPoints = (centerX, centerY, outerRadius, innerRadius, numPoints) => {
-                        const points = [];
-                        const angleStep = Math.PI / numPoints;
-
-                        for (let i = 0; i < 2 * numPoints; i++) {
-                            const radius = i % 2 === 0 ? outerRadius : innerRadius;
-                            const angle = i * angleStep - Math.PI / 2;
-                            points.push({
-                                x: centerX + radius * Math.cos(angle),
-                                y: centerY + radius * Math.sin(angle),
-                            });
-                        }
-                        return points;
-                    };
-
-                    const starPoints = createStarPoints(pointer.x, pointer.y, 50, 20, 5);
-
-                    let star = new Polygon(starPoints, {
-                        fill: 'transparent',
-                        stroke: 'black',
-                        strokeWidth: 1,
-                        originX: 'center',
-                        originY: 'center',
-                        ...defaultObjectStyles,
-                    });
-                    canvas.add(star);
-                    canvas.setActiveObject(star);
-                }
-                    break;
-
-                case "triangle": {
-                    const triangle = new Triangle({
-                        left: pointer.x,
-                        top: pointer.y,
-                        width: 100,
-                        height: 100,
-                        fill: 'transparent',
-                        stroke: 'black',
-                        strokeWidth: 1,
-                        originX: 'center',
-                        originY: 'center',
-                        ...defaultObjectStyles,
-                    });
-                    canvas.add(triangle);
-                    canvas.setActiveObject(triangle);
-                }
-                    break;
-
-                default:
-                    console.warn("Unknown figure type:", figureTypeRef.current);
+        if (isAddingFigureRef.current) {
+            const figure = createFigure(figureTypeRef.current, pointer);
+            if (figure) {
+                canvas.add(figure);
+                canvas.setActiveObject(figure);
+                canvas.renderAll();
             }
-            canvas.renderAll();
+
             isAddingFigureRef.current = false;
             figureTypeRef.current = null;
-            // После добавления фигуры сбрасываем режим
             setActiveMode(null);
+            return;
         }
     };
 
@@ -437,9 +436,10 @@ export function useCanvasLogic() {
 
     const handleMouseUp = (event) => {
         const canvas = canvasInstanceRef.current;
+        // ИЗМЕНЕНО: После панорамирования вернуть выбор объектов
         if (event.button === 1 && !canvas.isDrawingMode) {
             canvas.defaultCursor = 'default';
-            canvas.selection = true;
+            canvas.selection = true; // Возвращаем возможность выделения объектов
             panningActiveRef.current = false;
 
             if (lastPointerRef.current && prevPointerRef.current && prevTimeRef.current && lastTimeRef.current) {
@@ -461,10 +461,28 @@ export function useCanvasLogic() {
     };
 
     const handleKeyDown = (event) => {
-        if (event.key === 'Control') {
-            ctrlPressedRef.current = true;
-        } else if (event.key === 'Delete' || event.key === 'Del' || event.keyCode === 46) {
+        const canvas = canvasInstanceRef.current;
+
+        if (!canvas) return;
+        console.log('Key:', event.key, 'Ctrl:', event.ctrlKey, 'Shift:', event.shiftKey, 'Alt:', event.altKey);
+
+
+        // Удаление выделенных объектов
+        if (event.key === 'Delete' || event.key === 'Del') {
+            console.log('Delete pressed');
             deleteSelectedObjects();
+        }
+
+        // Копирование (Ctrl+C)
+        if (event.ctrlKey && event.code === 'KeyC') {
+            console.log('Ctrl+C pressed');
+            void handleCopy();
+        }
+
+        // Вставка (Ctrl+V)
+        if (event.ctrlKey && event.code === 'KeyV') {
+            console.log('Ctrl+V pressed');
+            void handlePaste();
         }
     };
 
@@ -487,11 +505,29 @@ export function useCanvasLogic() {
         obj.top = obj.top * zoom + vpt[5];
     };
 
+    const handleSelectionCreated = (event) => {
+        const canvas = canvasInstanceRef.current;
+        const activeObject = canvas.getActiveObject();
+        if (activeObject.type === 'activeselection') {
+            // Устанавливаем стили выделения
+            activeObject.borderColor = '#374151';
+            activeObject.cornerColor = '#1f2937'; // Углы
+            activeObject.cornerSize = 10; // Размер углов
+            activeObject.transparentCorners = false; // Прозрачность углов
+            activeObject.cornerStrokeColor = '#627ca1';
+            activeObject.padding = 0;
+            activeObject.borderScaleFactor = 1;
+            activeObject.selectable = true;
+            activeObject.evented = true;
+            canvas.renderAll();
+        }
+    };
+
     useEffect(() => {
         const canvasElement = canvasRef.current;
         const canvas = new Canvas(canvasElement, {
-            selectionKey: 'ctrlKey',
             backgroundColor: '#EEF2F9',
+            selection: true,
         });
 
         canvasInstanceRef.current = canvas;
@@ -508,6 +544,7 @@ export function useCanvasLogic() {
             width: 50,
             height: 50,
             fill: '#faa',
+            ...defaultObjectStyles,
         });
         const rect2 = new Rect({
             left: 500,
@@ -515,10 +552,34 @@ export function useCanvasLogic() {
             width: 50,
             height: 50,
             fill: '#afa',
+            ...defaultObjectStyles,
         });
 
         canvas.add(rect1);
         canvas.add(rect2);
+
+        var imageUrl = 'https://upload.wikimedia.org/wikipedia/commons/thumb/0/0e/Felis_silvestris_silvestris.jpg/275px-Felis_silvestris_silvestris.jpg';
+
+        FabricImage.fromURL(imageUrl, function(img) {
+            // Опционально: измените размер изображения
+            img.scaleToWidth(300);
+            img.scaleToHeight(200);
+
+            // Добавьте изображение на канвас
+            canvas.add(img);
+
+            // Опционально: сделайте изображение активным и перетаскиваемым
+            img.set({
+                left: 100,
+                top: 100,
+                selectable: true
+            });
+
+            canvas.renderAll();
+        }, {
+            crossOrigin: 'anonymous' // Опционально: если загружаете изображение с другого домена
+        });
+
 
         const starPoints = [
             { x: 50, y: 0 },
@@ -538,9 +599,9 @@ export function useCanvasLogic() {
             top: 100,
             fill: 'yellow',
             stroke: 'black',
-            strokeWidth: 2
+            strokeWidth: 2,
+            ...defaultObjectStyles,
         });
-
         canvas.add(star);
 
         const diamondWithRect = new Rect({
@@ -549,16 +610,10 @@ export function useCanvasLogic() {
             fill: 'cyan',
             width: 100,
             height: 100,
-            angle: 45
+            angle: 45,
+            ...defaultObjectStyles,
         });
-
         canvas.add(diamondWithRect);
-
-        drawGlobalBounds(canvas);
-        const boundary = canvas.getObjects().find((obj) => obj.stroke === 'blue');
-        if (boundary) {
-            canvas.sendObjectToBack(boundary);
-        }
 
         resizeCanvas();
         window.addEventListener('resize', resizeCanvas);
@@ -576,6 +631,9 @@ export function useCanvasLogic() {
         canvas.on('object:modified', (e) => {
             e.target.hasControls = true;
         });
+        canvas.on('selection:created', handleSelectionCreated);
+
+
 
         window.addEventListener('keydown', handleKeyDown, true);
         window.addEventListener('keyup', handleKeyUp);
@@ -588,6 +646,7 @@ export function useCanvasLogic() {
             canvas.wrapperEl.removeEventListener('mousemove', handleMouseMove);
             canvas.wrapperEl.removeEventListener('mouseup', handleMouseUp);
             canvas.off('mouse:down', handleCanvasMouseDown);
+            canvas.off('selection:created', handleSelectionCreated);
 
             window.removeEventListener('keydown', handleKeyDown, true);
             window.removeEventListener('keyup', handleKeyUp);
@@ -600,53 +659,66 @@ export function useCanvasLogic() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    const disableFigureMode = () => {
-        isAddingFigureRef.current = false;
-        figureTypeRef.current = null;
-        setActiveMode(null);
-    };
-
-    const handleToggleDrawing = () => {
+    function deleteSelectedObjects() {
         const canvas = canvasInstanceRef.current;
-        if (canvas) {
-            disableFigureMode();
-            isAddingTextRef.current = false;
-            setActiveMode((prevMode) => {
-                const isDrawing = prevMode === 'drawing';
-                canvas.isDrawingMode = !isDrawing;
-                return isDrawing ? null : 'drawing';
+        const activeObjects = canvas.getActiveObjects();
+        console.log('Active objects:', activeObjects);
+        if (activeObjects.length) {
+            activeObjects.forEach((obj) => {
+                console.log('Removing object:', obj);
+                canvas.remove(obj);
             });
-        }
-    };
-
-    const handleEnableTextAdding = () => {
-        const canvas = canvasInstanceRef.current;
-        if (canvas) {
-            if (activeMode === 'textAdding') {
-                canvas.defaultCursor = 'default';
-                isAddingTextRef.current = false;
-                setActiveMode(null);
-            } else {
-                canvas.defaultCursor = "text";
-                canvas.isDrawingMode = false;
-                isAddingTextRef.current = true;
-                isAddingFigureRef.current = false;
-                setActiveMode('textAdding');
-            }
-        }
-    };
-
-    const handleAddFigure = (figureType) => {
-        const canvas = canvasInstanceRef.current;
-        if (canvas) {
-            figureTypeRef.current = figureType;
-            isAddingFigureRef.current = true;
-            canvas.isDrawingMode = false;
-            canvas.selection = true;
-            isAddingTextRef.current = false;
-            setActiveMode("figureAdding");
+            canvas.discardActiveObject();
+            canvas.renderAll();
         }
     }
+
+    const setMode = (mode, figureType = null) => {
+        const canvas = canvasInstanceRef.current;
+        if (!canvas) return;
+
+        // Сброс всех режимов
+        canvas.isDrawingMode = false;
+        isAddingTextRef.current = false;
+        isAddingFigureRef.current = false;
+        figureTypeRef.current = null;
+
+        // Установка нового режима, если он указан
+        switch (mode) {
+            case 'drawing':
+                canvas.isDrawingMode = true;
+                break;
+            case 'textAdding':
+                isAddingTextRef.current = true;
+                break;
+            case 'figureAdding':
+                isAddingFigureRef.current = true;
+                figureTypeRef.current = figureType;
+                break;
+            default:
+                // Если mode === null, сбрасываем все режимы
+                break;
+        }
+
+        setActiveMode(mode); // Устанавливаем активный режим
+    };
+
+
+    const handleToggleDrawing = () => {
+        setMode(activeMode === 'drawing' ? null : 'drawing');
+    };
+
+
+    // Включение/выключение режима добавления текста
+    const handleEnableTextAdding = () => {
+        setMode(activeMode === 'textAdding' ? null : 'textAdding');
+    };
+
+
+    const handleAddFigure = (figureType) => {
+        setMode('figureAdding', figureType); // Передаём тип фигуры
+    };
+
 
     const handleZoomInButton = () => {
         const canvas = canvasInstanceRef.current;
@@ -654,7 +726,6 @@ export function useCanvasLogic() {
 
         const zoom = canvas.getZoom();
         const newZoom = zoom * ZOOM_FACTOR;
-
         if (newZoom > Math.pow(2, ZOOM_LEVEL_MAX)) return;
 
         const center = canvas.getCenter();
@@ -670,7 +741,6 @@ export function useCanvasLogic() {
 
         const zoom = canvas.getZoom();
         const newZoom = zoom / ZOOM_FACTOR;
-
         if (newZoom < Math.pow(2, ZOOM_LEVEL_MIN)) return;
 
         const center = canvas.getCenter();
@@ -679,6 +749,62 @@ export function useCanvasLogic() {
         setZoomPercent(Math.round(newZoom * 100));
         canvas.renderAll();
     };
+
+    const onImportImage = (event) => {
+        const canvas = canvasInstanceRef.current;
+
+        // Проверка на наличие canvas и файлов
+        if (!canvas || !event.target.files || event.target.files.length === 0) {
+            console.warn('No file selected or canvas not initialized');
+            return;
+        }
+
+        const imgObj = event.target.files[0];
+
+        // Проверка типа файла (только изображения)
+        if (!imgObj.type.startsWith('image/')) {
+            console.warn('Selected file is not an image');
+            return;
+        }
+
+        const reader = new FileReader();
+
+        reader.onload = (e) => {
+            const imageUrl = e.target.result;
+
+            const imageElement = document.createElement('img');
+            imageElement.src = imageUrl;
+
+            imageElement.onload = () => {
+                const image = new Image(imageElement, {
+                    left: canvas.width / 2,
+                    top: canvas.height / 2,
+                    originX: 'center',
+                    originY: 'center',
+                    selectable: true, // Объект можно выделять
+                    ...defaultObjectStyles,
+                });
+
+                // Добавляем изображение на canvas
+                canvas.add(image);
+                canvas.setActiveObject(image);
+                canvas.renderAll();
+            };
+
+            imageElement.onerror = () => {
+                console.error('Error loading the image');
+            };
+        };
+
+        reader.onerror = () => {
+            console.error('Error reading the file');
+        };
+
+        reader.readAsDataURL(imgObj);
+    };
+
+
+
 
     return {
         canvasRef,
@@ -689,5 +815,6 @@ export function useCanvasLogic() {
         handleZoomInButton,
         handleZoomOutButton,
         handleAddFigure,
+        onImportImage,
     };
 }

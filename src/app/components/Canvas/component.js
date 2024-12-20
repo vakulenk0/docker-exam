@@ -1,5 +1,3 @@
-'use client';
-
 import React from 'react';
 import { useCanvasLogic } from './useCanvasLogic';
 import ZoomIndicator from "@/app/components/ZoomIndicator/component";
@@ -15,10 +13,11 @@ const CanvasComponent = () => {
         handleZoomInButton,
         handleZoomOutButton,
         handleAddFigure,
+        onImportImage,
     } = useCanvasLogic();
 
     return (
-        <div className="w-screen h-screen overflow-hidden" style={{ position: 'relative' }}>
+        <div className="w-screen h-screen overflow-hidden relative">
             <ZoomIndicator
                 zoomPercent={zoomPercent}
                 onZoomIn={handleZoomInButton}
@@ -29,6 +28,7 @@ const CanvasComponent = () => {
                 onAddText={handleEnableTextAdding}
                 activeMode={activeMode}
                 onAddFigure={handleAddFigure}
+                onImportImage={onImportImage}
             />
             <canvas ref={canvasRef} className="border-0" />
         </div>

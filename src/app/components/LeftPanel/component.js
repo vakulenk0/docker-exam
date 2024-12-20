@@ -3,11 +3,10 @@
 import { useState, useEffect } from "react";
 import Image from 'next/image';
 
-const LeftPanel = ({ onToggleDrawing, onAddText, activeMode, onAddFigure }) => {
+const LeftPanel = ({ onToggleDrawing, onAddText, activeMode, onAddFigure, onImportImage }) => {
     const [isFigureMenuVisible, setFigureMenuVisible] = useState(false);
 
     useEffect(() => {
-        // Если активный режим поменялся и это не figureAdding, прячем меню фигур
         if (activeMode !== 'figureAdding') {
             setFigureMenuVisible(false);
         }
@@ -15,8 +14,8 @@ const LeftPanel = ({ onToggleDrawing, onAddText, activeMode, onAddFigure }) => {
 
     const handleFigureMenu = (figureName = null) => {
         if (figureName) {
-            onAddFigure(figureName); // Добавляем выбранную фигуру
-            setFigureMenuVisible(false); // Закрываем меню
+            onAddFigure(figureName);
+            setFigureMenuVisible(false);
         } else {
             setFigureMenuVisible((prev) => !prev);
         }
@@ -35,7 +34,6 @@ const LeftPanel = ({ onToggleDrawing, onAddText, activeMode, onAddFigure }) => {
         <div
             className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-gray-800 p-2 flex flex-col items-center space-y-2.5 z-10 rounded-lg shadow-lg"
         >
-            {/* Кнопка курсора */}
             <div
                 className={`w-12 h-12 hover:bg-gray-600 rounded flex items-center justify-center cursor-pointer ${activeMode === 'drawing' ? 'bg-gray-500' : 'bg-gray-700'}`}
                 onClick={onToggleDrawing}
@@ -43,7 +41,6 @@ const LeftPanel = ({ onToggleDrawing, onAddText, activeMode, onAddFigure }) => {
                 <Image src="/panelicons/cursor.svg" alt="Cursor" width={32} height={32} />
             </div>
 
-            {/* Кнопка фигур с меню */}
             <div className="relative">
                 <div
                     className={`w-12 h-12 ${
@@ -76,7 +73,6 @@ const LeftPanel = ({ onToggleDrawing, onAddText, activeMode, onAddFigure }) => {
                 )}
             </div>
 
-            {/* Добавление текста */}
             <div
                 className={`w-12 h-12 hover:bg-gray-600 rounded flex items-center justify-center cursor-pointer ${activeMode === 'textAdding' ? 'bg-gray-500' : 'bg-gray-700'}`}
                 onClick={onAddText}
@@ -84,9 +80,18 @@ const LeftPanel = ({ onToggleDrawing, onAddText, activeMode, onAddFigure }) => {
                 <Image src="/panelicons/text.svg" alt="Text" width={32} height={32}/>
             </div>
 
-            {/* Кнопка импорта, пока без логики */}
-            <div className="w-12 h-12 bg-gray-700 hover:bg-gray-600 rounded flex items-center justify-center">
+            <div
+                className="w-12 h-12 bg-gray-700 hover:bg-gray-600 rounded flex items-center justify-center cursor-pointer"
+                onClick={() => document.getElementById('imageUploadInput').click()}
+            >
                 <Image src="/panelicons/import.svg" alt="Import" width={32} height={32}/>
+                <input
+                    type="file"
+                    id="imageUploadInput"
+                    accept="image/*"
+                    style={{display: 'none'}}
+                    onChange={(e) => onImportImage(e)}
+                />
             </div>
         </div>
     );
