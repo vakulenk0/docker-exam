@@ -1,21 +1,23 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import {useEffect, useRef, useState} from 'react';
 import {
     ActiveSelection,
     Canvas,
+    Circle,
+    Ellipse,
+    FabricObject,
+    Group,
+    Image,
     PencilBrush,
     Point,
-    Rect,
-    Circle,
-    Textbox,
-    FabricObject,
     Polygon,
-    Ellipse,
+    Rect,
+    Textbox,
     Triangle,
-    Image, Group, util,
+    util,
 } from 'fabric';
-import CanvasHistory from "@/app/components/Canvas/CanvasHistory";
+import HistoryManager from "@/app/components/Canvas/HistoryManager";
 
 // ======================[ Константы для зума ]======================
 const ZOOM_LEVEL_MIN = -3;
@@ -112,6 +114,7 @@ export function useCanvasLogic() {
 
     // Для копирования/вставки
     const clipboardRef = useRef(null);
+    const historyManagerRef = useRef(null);
 
     // Контекстное меню
     const [contextMenu, setContextMenu] = useState({
@@ -138,65 +141,21 @@ export function useCanvasLogic() {
         opacity: 1.0,
     });
 
-    async function saveToDatabase() {
+    const handleUndo = () => {
         const canvas = canvasInstanceRef.current;
         if (!canvas) return;
-
-        const state = canvas.getObjects()
-            .filter(obj => !obj.isBoundary)
-            .map(obj => obj.toObject());
-
-        try {
-            const response = await fetch('/api/saveCanvas', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ canvasState: JSON.stringify(state) }),
-            });
-
-            if (response.ok) {
-                console.log('Canvas state saved to database.');
-            } else {
-                console.error('Failed to save canvas state to database.');
-            }
-        } catch (error) {
-            console.error('Error saving canvas state to database:', error);
+        if (historyManagerRef.current) {
+            historyManagerRef.current.undo();
         }
-    }
+    };
 
-    async function loadFromDatabase() {
-        try {
-            const response = await fetch('/api/saveCanvas');
-            if (response.ok) {
-                const { state } = await response.json();
-                const objects = await util.enlivenObjects(JSON.parse(state));
-                objects.forEach((obj) => canvasInstanceRef.current.add(obj));
-                canvasInstanceRef.current.renderAll();
-                console.log('Canvas state loaded from database.');
-            } else {
-                console.error('Failed to load canvas state from database.');
-            }
-        } catch (error) {
-            console.error('Error loading canvas state from database:', error);
+    const handleRedo = () => {
+        const canvas = canvasInstanceRef.current;
+        if (!canvas) return;
+        if (historyManagerRef.current) {
+            historyManagerRef.current.redo();
         }
-    }
-
-    function handleUndo() {
-        if (canvasHistoryRef.current) {
-            canvasHistoryRef.current.undo();
-        } else {
-            console.warn('Canvas history is not initialized.');
-        }
-    }
-
-    function handleRedo() {
-        if (canvasHistoryRef.current) {
-            canvasHistoryRef.current.redo();
-        } else {
-            console.warn('Canvas history is not initialized.');
-        }
-    }
+    };
 
     const handleUpdateBrush = (property, value) => {
         const canvas = canvasInstanceRef.current;
@@ -411,6 +370,7 @@ export function useCanvasLogic() {
         const activeObject = canvas.getActiveObject();
         if (activeObject) {
             canvas.bringObjectForward(activeObject);
+            
             canvas.renderAll();
         }
     }
@@ -420,6 +380,7 @@ export function useCanvasLogic() {
         const activeObject = canvas.getActiveObject();
         if (activeObject) {
             canvas.sendObjectBackwards(activeObject);
+            
             canvas.renderAll();
         }
     }
@@ -445,7 +406,7 @@ export function useCanvasLogic() {
             activeObjects.forEach(obj => canvas.remove(obj));
 
             canvas.add(group);
-            canvas.fire('custom:added');
+            
             canvas.setActiveObject(group);
             canvas.requestRenderAll();
         } else {
@@ -464,7 +425,7 @@ export function useCanvasLogic() {
 
             const groupItems = activeObject.removeAll();
             canvas.add(...groupItems);
-            canvas.fire('custom:added');
+            
 
             canvas.discardActiveObject();
             canvas.requestRenderAll();
@@ -480,6 +441,7 @@ export function useCanvasLogic() {
             const currentAngle = activeObject.angle || 0;
             activeObject.set('angle', (currentAngle + 90) % 360);
             activeObject.setCoords();
+            
             canvas.renderAll();
         }
     }
@@ -491,6 +453,7 @@ export function useCanvasLogic() {
             const currentAngle = activeObject.angle || 0;
             activeObject.set('angle', (currentAngle + 180) % 360);
             activeObject.setCoords();
+            
             canvas.renderAll();
         }
     }
@@ -500,6 +463,7 @@ export function useCanvasLogic() {
         const activeObject = canvas.getActiveObject();
         if (activeObject) {
             activeObject.set('flipX', !activeObject.flipX);
+            
             canvas.renderAll();
         }
     }
@@ -509,6 +473,7 @@ export function useCanvasLogic() {
         const activeObject = canvas.getActiveObject();
         if (activeObject) {
             activeObject.set('flipY', !activeObject.flipY);
+            
             canvas.renderAll();
         }
     }
@@ -523,7 +488,7 @@ export function useCanvasLogic() {
         cloned.top += 10;
 
         canvas.add(cloned);
-        canvas.fire('custom:added');
+        
         canvas.setActiveObject(cloned);
         canvas.renderAll();
     }
@@ -595,12 +560,12 @@ export function useCanvasLogic() {
                         evented: true,
                     });
                     canvas.add(obj);
-                    canvas.fire('custom:added');
+                    
                 });
                 clonedObj.setCoords();
             } else {
                 canvas.add(clonedObj);
-                canvas.fire('custom:added');
+                
             }
 
             canvas.setActiveObject(clonedObj);
@@ -780,8 +745,8 @@ export function useCanvasLogic() {
         const commonProps = {
             left: pointer.x,
             top: pointer.y,
-            fill: 'transparent',
-            stroke: 'black',
+            fill: '#000000',
+            stroke: '#000000',
             strokeWidth: 1,
             originX: 'center',
             originY: 'center',
@@ -881,7 +846,6 @@ export function useCanvasLogic() {
         canvas.setWidth(window.innerWidth);
         canvas.setHeight(window.innerHeight);
 
-        drawGlobalBounds(canvas);
         canvas.renderAll();
     }
 
@@ -991,7 +955,7 @@ export function useCanvasLogic() {
         if (isAddingTextRef.current) {
             const textbox = createTextbox(pointer);
             canvas.add(textbox);
-            canvas.fire('custom:added');
+            
             canvas.setActiveObject(textbox);
             canvas.renderAll();
 
@@ -1005,7 +969,7 @@ export function useCanvasLogic() {
             const figure = createFigure(figureTypeRef.current, pointer);
             if (figure) {
                 canvas.add(figure);
-                canvas.fire('custom:added');
+                
                 canvas.setActiveObject(figure);
                 canvas.renderAll();
             }
@@ -1041,14 +1005,11 @@ export function useCanvasLogic() {
             event.preventDefault()
             handleUndo(); // Ctrl+Z
         }
+
         if (event.ctrlKey && event.shiftKey && event.code === 'KeyZ') {
             event.preventDefault()
             handleRedo(); // Ctrl+Shift+Z
         }
-    }
-
-    function handleWindowKeyUp(event) {
-        // Можно обрабатывать Shift/Alt/Ctrl если нужно
     }
 
     // ======================[ Удаление выделенных объектов ]======================
@@ -1059,6 +1020,7 @@ export function useCanvasLogic() {
         const activeObjects = canvas.getActiveObjects();
         if (activeObjects.length) {
             activeObjects.forEach((obj) => canvas.remove(obj));
+            
             canvas.discardActiveObject();
             canvas.renderAll();
         }
@@ -1081,6 +1043,7 @@ export function useCanvasLogic() {
                 borderScaleFactor: 1,
                 selectable: true,
                 evented: true,
+                excludeFromExport: true,
             });
             canvas.renderAll();
         }
@@ -1097,69 +1060,15 @@ export function useCanvasLogic() {
         });
         canvasInstanceRef.current = canvas;
 
-        const canvasHistory = new CanvasHistory(canvas);
-        canvasHistoryRef.current = canvasHistory; // Храним его в ref для использования
+        const historyManager = new HistoryManager(canvas);
+        historyManagerRef.current = historyManager;
+        drawGlobalBounds(canvas);
 
         // Настройка кисти
         canvas.freeDrawingBrush = new PencilBrush(canvas);
         canvas.freeDrawingBrush.color = brushSettings.color;
         canvas.freeDrawingBrush.width = brushSettings.width;
         canvas.freeDrawingBrush.opacity = brushSettings.opacity;
-
-        // // Пример тестовых объектов
-        // const rect1 = new Rect({
-        //     left: 0,
-        //     top: 0,
-        //     width: 50,
-        //     height: 50,
-        //     fill: '#faa',
-        //     ...defaultObjectStyles,
-        // });
-        // const rect2 = new Rect({
-        //     left: 500,
-        //     top: 300,
-        //     width: 50,
-        //     height: 50,
-        //     fill: '#afa',
-        //     ...defaultObjectStyles,
-        // });
-        // canvas.add(rect1, rect2);
-        // canvas.fire('custom:added');
-        //
-        // const starPoints = [
-        //     { x: 50, y: 0 },
-        //     { x: 61, y: 35 },
-        //     { x: 98, y: 35 },
-        //     { x: 68, y: 57 },
-        //     { x: 79, y: 91 },
-        //     { x: 50, y: 70 },
-        //     { x: 21, y: 91 },
-        //     { x: 32, y: 57 },
-        //     { x: 2, y: 35 },
-        //     { x: 39, y: 35 },
-        // ];
-        // const star = new Polygon(starPoints, {
-        //     left: 100,
-        //     top: 100,
-        //     fill: 'yellow',
-        //     stroke: 'black',
-        //     strokeWidth: 2,
-        //     ...defaultObjectStyles,
-        // });
-        // canvas.add(star);
-        // canvas.fire('custom:added');
-        //
-        // const diamondWithRect = new Rect({
-        //     left: 200,
-        //     top: 200,
-        //     fill: 'cyan',
-        //     width: 100,
-        //     height: 100,
-        //     angle: 45,
-        //     ...defaultObjectStyles,
-        // });
-        // canvas.add(diamondWithRect);
-        // canvas.fire('custom:added');
 
         // Ресайз + отрисовка границ
         handleResizeCanvas();
@@ -1174,13 +1083,10 @@ export function useCanvasLogic() {
         canvas.wrapperEl.addEventListener('mouseup', handleDomMouseUp);
         canvas.wrapperEl.addEventListener('contextmenu', handleDomContextMenu);
 
-        // Добавляем события Fabric
+        // Другие события Fabric
         canvas.on('mouse:down', handleCanvasMouseDown);
         canvas.on('selection:created', handleSelectionCreated);
         canvas.on('after:render', updateCenterCoordinates);
-        canvas.on('object:added', () => canvas.fire('custom:added'));
-        canvas.on('object:modified', () => canvas.fire('custom:added'));
-        canvas.on('object:removed', () => canvas.fire('custom:added'));
         canvas.on('object:moving', (e) => {
             e.target.hasControls = false;
         });
@@ -1199,53 +1105,52 @@ export function useCanvasLogic() {
             updateObjectMenuPosition();
         });
 
+        const autoSave = () => {
+            const canvasJSON = canvas.toJSON();
+            localStorage.setItem('canvasState', JSON.stringify(canvasJSON));
+        };
+
+        canvas.on('object:added', (e) => {
+            if (historyManager.saveState && e.target) {
+                const uniqueId = historyManager._addToMap(e.target);
+                historyManager._addState(uniqueId, 'add', null, null);
+            }
+        });
+        canvas.on('object:removed', (e) => {
+            if (historyManager.saveState && e.target) {
+                const uniqueId = e.target.uniqueId;
+                historyManager._addState(uniqueId, 'remove', null, null);
+            }
+        });
+        canvas.on('object:modified', (e) => {
+            if (historyManager.saveState && e.target) {
+                const uniqueId = historyManager._addToMap(e.target);
+                const beforeProperties = e.transform?.original || {};
+                const afterProperties = {};
+                historyManager.keysToSave.forEach((key) => {
+                    afterProperties[key] = e.target[key];
+                    if (!beforeProperties[key]) {
+                        beforeProperties[key] = e.target[key];
+                    }
+                });
+                historyManager._addState(uniqueId, 'modify', beforeProperties, afterProperties);
+            }
+        });
+
+
         // Глобальные события
         window.addEventListener('click', handleCloseContextMenu);
         window.addEventListener('keydown', handleWindowKeyDown, true);
-        window.addEventListener('keyup', handleWindowKeyUp);
 
         // При первой загрузке устанавливаем зум
         updateZoomPercent(canvas);
         canvasElement.__canvas = canvas;
-
-        // ================== [  Load from localStorage on mount  ] ==================
-        const savedCanvasData = localStorage.getItem('fabricCanvasState');
-        if (savedCanvasData) {
-            canvas.loadFromJSON(savedCanvasData, () => {
-                canvas.renderAll();
-            });
-        }
-
-        // =========== [ Save to localStorage when the canvas changes ] ===========
-        const handleSaveToLocalStorage = () => {
-            // Include needed props so we keep custom styles & images:
-            const json = canvas.toJSON([
-                'src',
-                'borderColor',
-                'cornerColor',
-                'cornerStrokeColor',
-                'cornerSize',
-                'transparentCorners',
-                'selectable',
-                'evented',
-                'text',
-                'fontSize',
-                'fontFamily',
-                'fill',
-            ]);
-            localStorage.setItem('fabricCanvasState', JSON.stringify(json));
-        };
-
-        canvas.on('custom:added', handleSaveToLocalStorage);
-        canvas.on('object:modified', handleSaveToLocalStorage);
-        canvas.on('object:removed', handleSaveToLocalStorage);
 
         // Очистка при размонтировании
         return () => {
             window.removeEventListener('resize', handleResizeCanvas);
             window.removeEventListener('click', handleCloseContextMenu);
             window.removeEventListener('keydown', handleWindowKeyDown, true);
-            window.removeEventListener('keyup', handleWindowKeyUp);
 
             canvas.wrapperEl.removeEventListener('wheel', handleDomMouseWheel);
             canvas.wrapperEl.removeEventListener('mousedown', handleDomMouseDown);
@@ -1260,7 +1165,8 @@ export function useCanvasLogic() {
             if (inertiaRequestIdRef.current) {
                 cancelAnimationFrame(inertiaRequestIdRef.current);
             }
-            canvasHistoryRef.current = null;
+
+            historyManagerRef.current = null;
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
@@ -1345,7 +1251,7 @@ export function useCanvasLogic() {
                     fabricImage.top = canvasCenter.y;
 
                     canvas.add(fabricImage);
-                    canvas.fire('custom:added');
+                    
                     canvas.setActiveObject(fabricImage);
                     canvas.renderAll();
                 };
@@ -1412,7 +1318,7 @@ export function useCanvasLogic() {
                 });
 
                 canvas.add(fabricVideo);
-                canvas.fire('custom:added');
+                
                 canvas.setActiveObject(fabricVideo);
                 canvas.renderAll();
 

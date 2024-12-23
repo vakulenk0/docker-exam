@@ -9,13 +9,16 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@reduxjs/toolkit": "^2.5.0",
     "bcrypt": "^5.1.1",
     "body-parser": "^1.20.3",
     "cors": "^2.8.5",
     "express": "^4.21.2",
     "fabric": "^6.5.3",
     "gifuct-js": "^2.1.2",
+    "immer": "^10.1.1",
     "jsonwebtoken": "^9.0.2",
+    "lodash": "^4.17.21",
     "next": "15.0.3",
     "node-fetch": "^3.3.2",
     "pdfjs-dist": "^4.9.155",
@@ -23,7 +26,11 @@
     "prop-types": "^15.8.1",
     "react": "19.0.0-rc-66855b96-20241106",
     "react-dom": "19.0.0-rc-66855b96-20241106",
-    "sequelize": "^6.37.5"
+    "react-redux": "^9.2.0",
+    "redux": "^5.0.1",
+    "redux-undo": "^1.1.0",
+    "sequelize": "^6.37.5",
+    "zustand": "^5.0.2"
   },
   "devDependencies": {
     "eslint": "^8",
