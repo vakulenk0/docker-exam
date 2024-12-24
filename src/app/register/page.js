@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import {fetchWithAuth} from "@/app/utils/auth";
 
 export default function Register() {
   const [username, setUsername] = useState('');
@@ -16,7 +17,7 @@ export default function Register() {
     setErrorMessage('');
 
     try {
-      const response = await fetch('/api/register', {
+      const response = await fetchWithAuth('/api/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, email, password }),

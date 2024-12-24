@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import CanvasComponent from '@/app/components/Canvas/component';
 import { useRouter } from 'next/navigation';
+import {fetchWithAuth} from "@/app/utils/auth";
 
 export default function CanvasPage({ params: initialParams }) {
     const [id, setId] = useState(null);
@@ -31,9 +32,7 @@ export default function CanvasPage({ params: initialParams }) {
             }
 
             try {
-                const response = await fetch(`/api/canvas/${id}`, {
-                    headers: { Authorization: `Bearer ${token}` },
-                });
+                const response = await fetchWithAuth(`/api/canvas/${id}`);
 
                 if (!response.ok) {
                     const errorData = await response.json();
@@ -63,12 +62,8 @@ export default function CanvasPage({ params: initialParams }) {
         }
 
         try {
-            const response = await fetch(`/api/canvas/save`, {
+            const response = await fetchWithAuth(`/api/canvas/save`, {
                 method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${token}`,
-                },
                 body: JSON.stringify({ id, content: data }),
             });
 

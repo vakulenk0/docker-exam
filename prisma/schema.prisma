@@ -4,7 +4,7 @@ generator client {
 
 datasource db {
   provider = "postgresql" // или "mysql", "sqlite", в зависимости от вашей БД
-  url      = env("DATABASE_URL") // URL вашей базы данных из .env файла
+  url      = env("NEXT_PUBLIC_DATABASE_URL") // URL вашей базы данных из .env файла
 }
 
 model User {

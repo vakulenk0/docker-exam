@@ -18,6 +18,7 @@ import {
     util,
 } from 'fabric';
 import HistoryManager from "@/app/components/Canvas/HistoryManager";
+import {fetchWithAuth} from "@/app/utils/auth";
 
 // ======================[ Константы для зума ]======================
 const ZOOM_LEVEL_MIN = -3;
@@ -144,12 +145,8 @@ export function useCanvasLogic() {
     const saveCanvas = async (saveEndpoint, canvasJSON) => {
         try {
             const token = localStorage.getItem('token');
-            const response = await fetch(saveEndpoint, {
+            const response = await fetchWithAuth(saveEndpoint, {
                 method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${token}`,
-                },
                 body: JSON.stringify({ content: canvasJSON }),
             });
 

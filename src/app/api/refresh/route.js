@@ -1,25 +1,39 @@
-import jwt from 'jsonwebtoken';
+import { verifyRefreshToken, generateTokens } from "@/app/utils/auth";
+import { PrismaClient } from "@prisma/client";
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret';
-const REFRESH_SECRET = process.env.REFRESH_SECRET || 'your_refresh_secret';
+const prisma = new PrismaClient();
 
 export async function POST(req) {
     try {
         const { refreshToken } = await req.json();
 
         // Проверяем refresh токен
-        const decoded = jwt.verify(refreshToken, REFRESH_SECRET);
-
-        if (!decoded) {
-            return new Response(JSON.stringify({ message: 'Неавторизованный запрос' }), { status: 401 });
+        const decoded = verifyRefreshToken(refreshToken);
+        if (!decoded || decoded.error) {
+            return new Response(
+                JSON.stringify({ message: "Неверный или истёкший refresh токен" }),
+                { status: 401 }
+            );
         }
 
-        // Генерируем новый access токен
-        const newAccessToken = jwt.sign({ userId: decoded.userId }, JWT_SECRET, { expiresIn: '1h' });
+        // Проверяем существование пользователя
+        const user = await prisma.user.findUnique({ where: { id: decoded.userId } });
+        if (!user) {
+            return new Response(
+                JSON.stringify({ message: "Пользователь не найден" }),
+                { status: 404 }
+            );
+        }
 
-        return new Response(JSON.stringify({ accessToken: newAccessToken }), { status: 200 });
+        // Генерируем новые токены
+        const tokens = generateTokens({ userId: user.id });
+
+        return new Response(JSON.stringify(tokens), { status: 200 });
     } catch (error) {
-        console.error('Ошибка обновления токена:', error);
-        return new Response(JSON.stringify({ message: 'Ошибка обновления токена', error }), { status: 401 });
+        console.error("Ошибка обновления токена:", error);
+        return new Response(
+            JSON.stringify({ message: "Ошибка сервера" }),
+            { status: 500 }
+        );
     }
 }

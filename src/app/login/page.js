@@ -24,7 +24,10 @@ export default function Login() {
       const data = await response.json();
 
       if (response.ok) {
-        localStorage.setItem('token', data.token); // Сохраняем токен
+        console.log(data.accesssToken);
+        console.log(data.refreshToken);
+        localStorage.setItem("token", data.accesssToken);
+        localStorage.setItem("refreshToken", data.refreshToken);
         router.push('/dashboard'); // Перенаправление на защищённую страницу
       } else if (response.status === 400 || response.status === 401) {
         // Обработка ошибок валидации или аутентификации

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import {fetchWithAuth} from "@/app/utils/auth";
 
 export default function Dashboard() {
     const [canvases, setCanvases] = useState([]);
@@ -19,9 +20,8 @@ export default function Dashboard() {
 
     const fetchCanvases = async (token) => {
         try {
-            const response = await fetch('/api/canvas', {
-                headers: { Authorization: `Bearer ${token}` },
-            });
+            const response = await fetchWithAuth('/api/canvas');
+
             const data = await response.json();
             if (response.ok) {
                 setCanvases(data.canvases);
@@ -34,12 +34,8 @@ export default function Dashboard() {
     const createCanvas = async () => {
         const token = localStorage.getItem('token');
         try {
-            const response = await fetch('/api/canvas/create', {
+            const response = await fetchWithAuth('/api/canvas/create', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${token}`,
-                },
                 body: JSON.stringify({ title: newCanvasTitle }),
             });
 
@@ -56,12 +52,8 @@ export default function Dashboard() {
     const deleteCanvas = async (id) => {
         const token = localStorage.getItem('token');
         try {
-            const response = await fetch('/api/canvas/delete', {
+            const response = await fetchWithAuth('/api/canvas/delete', {
                 method: 'DELETE',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${token}`,
-                },
                 body: JSON.stringify({ id }),
             });
 
