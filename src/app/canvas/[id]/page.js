@@ -1,13 +1,16 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import CanvasComponent from "@/app/components/Canvas/component";
 import { fetchWithAuth } from "@/app/lib/clientAuth";
+import { useRouter } from "next/navigation";
 
 export default function CanvasPage({ params }) {
     const [canvasData, setCanvasData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [errorMessage, setErrorMessage] = useState('');
+    const router = useRouter();
+    const [saveCanvas, setSaveCanvas] = useState(null);
 
     // Разворачиваем params
     const { id } = React.use(params);
@@ -49,6 +52,13 @@ export default function CanvasPage({ params }) {
 
         fetchCanvas();
     }, [id]);
+
+    const handleExit = useCallback(async () => {
+        if (saveCanvas) {
+            await saveCanvas(); // Сохраняем канвас перед выходом
+        }
+        router.push('/dashboard'); // Переходим на dashboard
+    }, [saveCanvas, router]);
 
     if (loading) {
         return (
@@ -102,9 +112,20 @@ export default function CanvasPage({ params }) {
     }
 
     return (
-        <CanvasComponent
-            initialData={canvasData}
-            canvasId={id} // Передаём ID канваса
-        />
+        <>
+            <CanvasComponent
+                initialData={canvasData}
+                canvasId={id}
+                setSaveCanvas={setSaveCanvas} // Передаём функцию сохранения
+            />
+            <div className="absolute font-sans top-4 right-4">
+                <button
+                    onClick={handleExit}
+                    className="px-4 py-2 bg-gray-800 text-white text-lg font-medium rounded-md shadow-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                >
+                    Выйти
+                </button>
+            </div>
+        </>
     );
 }

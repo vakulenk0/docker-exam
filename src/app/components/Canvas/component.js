@@ -7,7 +7,8 @@ import TextMenu from '@/app/components/TextMenu/component';
 import ObjectMenu from '@/app/components/ObjectMenu/component';
 import { fetchWithAuth } from '@/app/lib/clientAuth';
 
-const CanvasComponent = React.memo(({ initialData, canvasId }) => {
+// eslint-disable-next-line react/display-name
+const CanvasComponent = React.memo(({ initialData, canvasId, setSaveCanvas }) => {
     const {
         canvasRef,
         initializeCanvas,
@@ -41,9 +42,6 @@ const CanvasComponent = React.memo(({ initialData, canvasId }) => {
             initializeCanvas({ initialData });
         }
     }, [initialData, initializeCanvas]); // Безопасно добавляем initializeCanvas
-
-
-
 
     const saveCanvasData = useCallback(async () => {
         const canvasJSON = getCanvasData();
@@ -80,6 +78,12 @@ const CanvasComponent = React.memo(({ initialData, canvasId }) => {
     }, [canvasId, getCanvasData]);
 
     useEffect(() => {
+        if (setSaveCanvas) {
+            setSaveCanvas(() => saveCanvasData);
+        }
+    }, [setSaveCanvas, saveCanvasData]);
+
+    useEffect(() => {
         const handleBeforeUnload = (event) => {
             saveCanvasData();
             event.preventDefault();
@@ -89,7 +93,6 @@ const CanvasComponent = React.memo(({ initialData, canvasId }) => {
         window.addEventListener('beforeunload', handleBeforeUnload);
 
         return () => {
-            // saveCanvasData();
             window.removeEventListener('beforeunload', handleBeforeUnload);
         };
     }, [saveCanvasData]);
