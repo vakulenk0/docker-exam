@@ -1,6 +1,6 @@
 'use client';
 
-import {useEffect, useRef, useState} from 'react';
+import {useCallback, useEffect, useRef, useState} from 'react';
 import {
     ActiveSelection,
     Canvas,
@@ -18,7 +18,8 @@ import {
     util,
 } from 'fabric';
 import HistoryManager from "@/app/components/Canvas/HistoryManager";
-import {fetchWithAuth} from "@/app/utils/auth";
+import { fetchWithAuth } from "@/app/lib/clientAuth";
+
 
 // ======================[ Константы для зума ]======================
 const ZOOM_LEVEL_MIN = -3;
@@ -83,7 +84,6 @@ Image.prototype.toObject = (function (toObject) {
 export function useCanvasLogic() {
     const canvasRef = useRef(null);
     const canvasInstanceRef = useRef(null);
-    const canvasHistoryRef = useRef(null);
 
     // Рефы для отслеживания режима добавления текста / фигур
     const isAddingTextRef = useRef(false);
@@ -141,27 +141,6 @@ export function useCanvasLogic() {
         width: 5,
         opacity: 1.0,
     });
-
-    const saveCanvas = async (saveEndpoint, canvasJSON) => {
-        try {
-            const token = localStorage.getItem('token');
-            const response = await fetchWithAuth(saveEndpoint, {
-                method: 'PUT',
-                body: JSON.stringify({ content: canvasJSON }),
-            });
-
-            if (!response.ok) {
-                console.error('Ошибка сохранения на сервер:', await response.text());
-                return false;
-            }
-
-            console.log('Канвас успешно сохранён на сервер');
-            return true;
-        } catch (error) {
-            console.error('Ошибка при сохранении канваса:', error);
-            return false;
-        }
-    };
 
     const handleUndo = () => {
         const canvas = canvasInstanceRef.current;
@@ -636,6 +615,7 @@ export function useCanvasLogic() {
             selectable: false,
             evented: false,
             isBoundary: true,
+            isProtected: true,
         });
 
         canvas.add(boundary);
@@ -1076,21 +1056,24 @@ export function useCanvasLogic() {
         const canvasElement = canvasRef.current;
         if (!canvasElement) return;
 
-        // Удаляем предыдущий экземпляр канвы, если он существует
-        if (canvasElement.__canvas) {
-            canvasElement.__canvas.dispose();
-            canvasElement.__canvas = null; // Убираем ссылку на старую канву
+        if (canvasInstanceRef.current) {
+            console.warn("Canvas instance already initialized");
+            return;
         }
 
         const canvas = new Canvas(canvasElement, {
             backgroundColor: '#EEF2F9',
             selection: true,
         });
+
         canvasInstanceRef.current = canvas;
+
+        if (!boundary) drawGlobalBounds(canvas);
 
         const historyManager = new HistoryManager(canvas);
         historyManagerRef.current = historyManager;
-        drawGlobalBounds(canvas);
+
+        historyManager.clear()
 
         // Настройка кисти
         canvas.freeDrawingBrush = new PencilBrush(canvas);
@@ -1103,15 +1086,17 @@ export function useCanvasLogic() {
         window.addEventListener('resize', handleResizeCanvas);
 
         // Добавляем события на DOM-элемент канвы
-        canvas.wrapperEl.addEventListener('wheel', handleDomMouseWheel, {
-            passive: false,
-        });
-        canvas.wrapperEl.addEventListener('mousedown', handleDomMouseDown);
-        canvas.wrapperEl.addEventListener('mousemove', handleDomMouseMove);
-        canvas.wrapperEl.addEventListener('mouseup', handleDomMouseUp);
-        canvas.wrapperEl.addEventListener('contextmenu', handleDomContextMenu);
+        if (canvas.wrapperEl) {
+            canvas.wrapperEl.addEventListener('wheel', handleDomMouseWheel, {
+                passive: false,
+            });
+            canvas.wrapperEl.addEventListener('mousedown', handleDomMouseDown);
+            canvas.wrapperEl.addEventListener('mousemove', handleDomMouseMove);
+            canvas.wrapperEl.addEventListener('mouseup', handleDomMouseUp);
+            canvas.wrapperEl.addEventListener('contextmenu', handleDomContextMenu);
+        }
 
-        // Другие события Fabric
+        // Fabric события
         canvas.on('mouse:down', handleCanvasMouseDown);
         canvas.on('selection:created', handleSelectionCreated);
         canvas.on('after:render', updateCenterCoordinates);
@@ -1133,10 +1118,6 @@ export function useCanvasLogic() {
             updateObjectMenuPosition();
         });
 
-        const autoSave = () => {
-            const canvasJSON = canvas.toJSON();
-            localStorage.setItem('canvasState', JSON.stringify(canvasJSON));
-        };
 
         canvas.on('object:added', (e) => {
             if (historyManager.saveState && e.target) {
@@ -1165,77 +1146,94 @@ export function useCanvasLogic() {
             }
         });
 
-
         // Глобальные события
         window.addEventListener('click', handleCloseContextMenu);
         window.addEventListener('keydown', handleWindowKeyDown, true);
 
-        // При первой загрузке устанавливаем зум
         updateZoomPercent(canvas);
-        canvasElement.__canvas = canvas;
-        initializeCanvas({ canvas });
 
         // Очистка при размонтировании
         return () => {
-            canvas.dispose();
             window.removeEventListener('resize', handleResizeCanvas);
             window.removeEventListener('click', handleCloseContextMenu);
             window.removeEventListener('keydown', handleWindowKeyDown, true);
 
-            canvas.wrapperEl.removeEventListener('wheel', handleDomMouseWheel);
-            canvas.wrapperEl.removeEventListener('mousedown', handleDomMouseDown);
-            canvas.wrapperEl.removeEventListener('mousemove', handleDomMouseMove);
-            canvas.wrapperEl.removeEventListener('mouseup', handleDomMouseUp);
-            canvas.wrapperEl.removeEventListener('contextmenu', handleDomContextMenu);
+            if (canvas?.wrapperEl) {
+                canvas.wrapperEl.removeEventListener('wheel', handleDomMouseWheel);
+                canvas.wrapperEl.removeEventListener('mousedown', handleDomMouseDown);
+                canvas.wrapperEl.removeEventListener('mousemove', handleDomMouseMove);
+                canvas.wrapperEl.removeEventListener('mouseup', handleDomMouseUp);
+                canvas.wrapperEl.removeEventListener('contextmenu', handleDomContextMenu);
+            }
 
-            canvas.off('mouse:down', handleCanvasMouseDown);
-            canvas.off('selection:created', handleSelectionCreated);
-            canvas.off('after:render', updateCenterCoordinates);
+            canvas?.off('mouse:down', handleCanvasMouseDown);
+            canvas?.off('selection:created', handleSelectionCreated);
+            canvas?.off('after:render', updateCenterCoordinates);
 
             if (inertiaRequestIdRef.current) {
                 cancelAnimationFrame(inertiaRequestIdRef.current);
             }
 
             historyManagerRef.current = null;
+
+            canvas.dispose();
+            canvasInstanceRef.current = null;
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    const initializeCanvas = ({ initialData = null, onSaveCallback = null }) => {
+    const getCanvasData = () => {
+        const canvas = canvasInstanceRef.current;
+        if (!canvas) {
+            console.error("Canvas instance is not available when retrieving data.");
+            return null;
+        }
+
+        const canvasData = canvas.toJSON();
+        console.log("Canvas data retrieved successfully:", canvasData);
+        return canvasData;
+    };
+
+// Инициализация канваса
+    const initializeCanvas = useCallback(({ initialData = null } = {}) => {
         const canvas = canvasInstanceRef.current;
 
         if (!canvas) {
-            console.error('Canvas instance is not initialized.');
+            console.error('Canvas instance не инициализирован.');
             return;
         }
 
-        // Загрузка данных на холст
-        if (initialData) {
-            canvas.loadFromJSON(initialData, () => {
-                canvas.renderAll();
-            });
+        // Исключаем дублирование вызова
+        const objectsExcludingBoundary = canvas.getObjects().filter((obj) => !obj.isBoundary);
+        if (objectsExcludingBoundary.length > 0) {
+            console.log('Канвас уже содержит пользовательские объекты, повторная инициализация пропущена.');
+            return;
         }
 
-        // Установка коллбека сохранения
-        if (onSaveCallback) {
-            canvas.on('object:modified', () => {
-                const canvasJSON = canvas.toJSON();
-                onSaveCallback(canvasJSON);
-            });
-
-            // Сохранение при добавлении объекта
-            canvas.on('object:added', () => {
-                const canvasJSON = canvas.toJSON();
-                onSaveCallback(canvasJSON);
-            });
-
-            // Сохранение при удалении объекта
-            canvas.on('object:removed', () => {
-                const canvasJSON = canvas.toJSON();
-                onSaveCallback(canvasJSON);
-            });
+        // Очистка истории перед загрузкой данных
+        if (historyManagerRef.current) {
+            historyManagerRef.current.clear();
         }
-    };
+
+        if (initialData && initialData.objects && initialData.objects.length > 0) {
+            console.log('Инициализация канваса:', initialData);
+            try {
+                canvas.loadFromJSON(initialData, () => {
+                    console.log('Данные канваса загружены успешно.');
+                    canvas.renderAll();
+                    if (historyManagerRef.current) {
+                        historyManagerRef.current.clear(); // Дополнительно очищаем историю после загрузки
+                    }
+                });
+            } catch (error) {
+                console.error('Ошибка при загрузке данных в канвас:', error);
+            }
+        } else {
+            console.warn('Инициализация канваса пропущена: данные отсутствуют.');
+        }
+    }, []);
+
+
 
     // ======================[ Методы для переключения режимов ]======================
     function setMode(mode, figureType = null) {
@@ -1430,7 +1428,7 @@ export function useCanvasLogic() {
         handleUpdateBrush,
         handleUndo,
         handleRedo,
-        saveCanvas,               // Метод ручного сохранения
         initializeCanvas,         // Метод инициализации канваса
+        getCanvasData,
     };
 }

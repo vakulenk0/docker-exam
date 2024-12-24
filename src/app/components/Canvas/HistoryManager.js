@@ -14,19 +14,19 @@ export default class HistoryManager {
 
     _setupCanvasEvents() {
         this.canvas.on('object:added', (e) => {
-            if (!this.saveState || !e.target.saveable) return;
+            if (!this.saveState || !e.target.saveable || e.target.isProtected || e.target === this.canvas) return;
             const uniqueId = this._addToMap(e.target);
             this._addState(uniqueId, 'add', null, null);
         });
 
         this.canvas.on('object:removed', (e) => {
-            if (!this.saveState || !e.target.saveable) return;
+            if (!this.saveState || !e.target.saveable || e.target.isProtected || e.target === this.canvas) return;
             const uniqueId = e.target.uniqueId;
             this._addState(uniqueId, 'remove', null, null);
         });
 
         this.canvas.on('object:modified', (e) => {
-            if (!this.saveState || !e.target.saveable) return;
+            if (!this.saveState || !e.target.saveable || e.target.isProtected || e.target === this.canvas) return;
             const uniqueId = this._addToMap(e.target);
             const beforeProperties = {};
             const afterProperties = {};
@@ -41,6 +41,10 @@ export default class HistoryManager {
     }
 
     _addToMap(object) {
+        if (!object || object === this.canvas) {
+            console.warn('Попытка добавить канвас в историю предотвращена.');
+            return null;
+        }
         if (object.uniqueId) return object.uniqueId;
         this.mapIndex += 1;
         object.uniqueId = this.mapIndex;
@@ -109,5 +113,13 @@ export default class HistoryManager {
 
         this.saveState = true;
         this.canvas.requestRenderAll();
+    }
+
+    clear() {
+        this.history.splice(0, this.history.length);
+        this.historyIndex = -1;
+        this.objectMap.clear();
+        this.mapIndex = 0;
+        console.log("История очищена")
     }
 }

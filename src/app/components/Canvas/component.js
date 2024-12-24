@@ -1,16 +1,17 @@
-import React from 'react';
+import React, { useEffect, useCallback } from 'react';
 import { useCanvasLogic } from './useCanvasLogic';
 import ZoomIndicator from '@/app/components/ZoomIndicator/component';
 import LeftPanel from '@/app/components/LeftPanel/component';
 import ContextMenu from '@/app/components/ContextMenu/component';
 import TextMenu from '@/app/components/TextMenu/component';
 import ObjectMenu from '@/app/components/ObjectMenu/component';
-import { Canvas } from "fabric";
+import { fetchWithAuth } from '@/app/lib/clientAuth';
 
-const CanvasComponent = ({ initialData, saveEndpoint, onSave }) => {
+const CanvasComponent = React.memo(({ initialData, canvasId }) => {
     const {
         canvasRef,
-        saveCanvas,
+        initializeCanvas,
+        getCanvasData,
         contextMenu,
         menuOptions,
         textMenu,
@@ -31,32 +32,76 @@ const CanvasComponent = ({ initialData, saveEndpoint, onSave }) => {
         handleUpdateBrush,
         handleUndo,
         handleRedo,
-        initializeCanvas,
     } = useCanvasLogic();
 
-    React.useEffect(() => {
-        // Инициализируем канву через функцию из useCanvasLogic
-        initializeCanvas({ initialData, onSave: handleSave });
-    }, [initializeCanvas, initialData]);
-
-    const handleSave = async () => {
-        const result = await saveCanvas(saveEndpoint);
-        if (result) {
-            console.log('Канвас сохранён вручную.');
+    // Инициализация канваса при первом рендере
+    useEffect(() => {
+        if (initialData) {
+            console.log("Попытка инициализации канваса при монтировании:", initialData);
+            initializeCanvas({ initialData });
         }
-    };
+    }, [initialData, initializeCanvas]); // Безопасно добавляем initializeCanvas
+
+
+
+
+    const saveCanvasData = useCallback(async () => {
+        const canvasJSON = getCanvasData();
+        console.log("Попытка сохранения канваса:", canvasJSON);
+
+        // Проверяем, есть ли объекты на канвасе
+        if (!canvasJSON || !canvasJSON.objects || canvasJSON.objects.length === 0) {
+            console.warn("Пустые данные канваса. Сохранение пропущено.");
+            return; // Пропускаем сохранение
+        }
+
+        try {
+            const response = await fetchWithAuth(`/api/canvas/save`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    id: canvasId,
+                    content: JSON.stringify(canvasJSON), // Преобразуем в строку JSON
+                }),
+            });
+
+            console.log("Ответ сервера на сохранение:", response);
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                console.error("Ошибка сохранения (ответ сервера):", errorData);
+            } else {
+                const successData = await response.json();
+                console.log("Канвас успешно сохранён (ответ сервера):", successData);
+            }
+        } catch (error) {
+            console.error("Ошибка при попытке сохранить канвас:", error);
+        }
+    }, [canvasId, getCanvasData]);
+
+    useEffect(() => {
+        const handleBeforeUnload = (event) => {
+            saveCanvasData();
+            event.preventDefault();
+            event.returnValue = ''; // Требуется для предупреждения о выходе
+        };
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+
+        return () => {
+            // saveCanvasData();
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+        };
+    }, [saveCanvasData]);
 
     return (
         <div className="w-screen h-screen overflow-hidden relative">
-            {/* Индикатор зума */}
             <ZoomIndicator
                 zoomPercent={zoomPercent}
                 centerCoordinates={centerCoordinates}
                 onZoomIn={handleZoomInButton}
                 onZoomOut={handleZoomOutButton}
             />
-
-            {/* Панель инструментов */}
             <LeftPanel
                 onToggleDrawing={handleToggleDrawing}
                 onAddText={handleEnableTextAdding}
@@ -68,8 +113,6 @@ const CanvasComponent = ({ initialData, saveEndpoint, onSave }) => {
                 onUndo={handleUndo}
                 onRedo={handleRedo}
             />
-
-            {/* Контекстное меню */}
             <ContextMenu
                 isVisible={contextMenu.isVisible}
                 position={contextMenu.position}
@@ -79,34 +122,21 @@ const CanvasComponent = ({ initialData, saveEndpoint, onSave }) => {
                     handleCloseContextMenu();
                 }}
             />
-
-            {/* Меню текста */}
             <TextMenu
                 isVisible={textMenu.isVisible}
                 position={textMenu.position}
                 target={textMenu.target}
                 onUpdateText={handleUpdateText}
             />
-
-            {/* Меню объектов */}
             <ObjectMenu
                 isVisible={objectMenu.isVisible}
                 position={objectMenu.position}
                 target={objectMenu.target}
                 onUpdateObject={handleUpdateObject}
             />
-
-            <button
-                onClick={handleSave}
-                className="absolute bottom-4 right-4 bg-green-500 text-white px-4 py-2 rounded shadow-lg"
-            >
-                Сохранить
-            </button>
-
-            {/* Холст */}
-            <canvas ref={canvasRef} className="border-0"/>
+            <canvas ref={canvasRef} className="border-0" />
         </div>
     );
-};
+});
 
 export default CanvasComponent;

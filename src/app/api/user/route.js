@@ -12,20 +12,20 @@ export async function GET(req) {
             return new Response(JSON.stringify({ message: "Неавторизованный запрос" }), { status: 401 });
         }
 
-        const canvases = await prisma.canvas.findMany({
-            where: { userId: decoded.userId },
-            select: {
-                id: true,
-                title: true,
-                createdAt: true,
-            },
+        const user = await prisma.user.findUnique({
+            where: { id: decoded.userId },
+            select: { username: true },
         });
 
-        return new Response(JSON.stringify({ canvases }), { status: 200 });
+        if (!user) {
+            return new Response(JSON.stringify({ message: "Пользователь не найден" }), { status: 404 });
+        }
+
+        return new Response(JSON.stringify(user), { status: 200 });
     } catch (error) {
-        console.error("Ошибка при получении канвасов:", error);
+        console.error("Ошибка получения данных пользователя:", error);
         return new Response(
-            JSON.stringify({ message: "Ошибка при получении канвасов", error: error.message }),
+            JSON.stringify({ message: "Ошибка сервера", error: error.message }),
             { status: 500 }
         );
     }

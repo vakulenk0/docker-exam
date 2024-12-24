@@ -1,14 +1,22 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { isTokenExpired } from '@/app/lib/clientAuth'; // Функция проверки истечения токена
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const router = useRouter();
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token && !isTokenExpired(token)) {
+      router.push('/dashboard'); // Перенаправляем на dashboard, если токен валиден
+    }
+  }, []);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -24,13 +32,10 @@ export default function Login() {
       const data = await response.json();
 
       if (response.ok) {
-        console.log(data.accesssToken);
-        console.log(data.refreshToken);
-        localStorage.setItem("token", data.accesssToken);
-        localStorage.setItem("refreshToken", data.refreshToken);
-        router.push('/dashboard'); // Перенаправление на защищённую страницу
+        localStorage.setItem('token', data.accessToken);
+        localStorage.setItem('refreshToken', data.refreshToken);
+        router.push('/dashboard');
       } else if (response.status === 400 || response.status === 401) {
-        // Обработка ошибок валидации или аутентификации
         setErrorMessage(data.errors ? data.errors.join(', ') : data.message);
       } else {
         setErrorMessage(data.message || 'Ошибка входа');
@@ -45,7 +50,6 @@ export default function Login() {
         <div className="w-full max-w-md p-8 bg-white rounded shadow-md">
           <h2 className="text-2xl font-bold text-center text-gray-800 mb-4">Войти</h2>
 
-          {/* Отображение ошибки */}
           {errorMessage && (
               <div className="mb-4 p-3 bg-red-100 text-red-700 border border-red-300 rounded">
                 {errorMessage}

@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import {fetchWithAuth} from "@/app/utils/auth";
+import { isTokenExpired } from '@/app/lib/clientAuth';
 
 export default function Register() {
   const [username, setUsername] = useState('');
@@ -12,12 +12,19 @@ export default function Register() {
   const [errorMessage, setErrorMessage] = useState('');
   const router = useRouter();
 
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token && !isTokenExpired(token)) {
+      router.push('/dashboard'); // Перенаправляем на dashboard, если токен валиден
+    }
+  }, []);
+
   const handleSubmit = async (event) => {
     event.preventDefault();
     setErrorMessage('');
 
     try {
-      const response = await fetchWithAuth('/api/register', {
+      const response = await fetch('/api/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, email, password }),
@@ -26,9 +33,8 @@ export default function Register() {
       const data = await response.json();
 
       if (response.ok) {
-        router.push('/login'); // Перенаправление на страницу логина
+        router.push('/login');
       } else if (response.status === 400) {
-        // Ошибки валидации
         setErrorMessage(data.errors ? data.errors.join(', ') : data.message);
       } else {
         setErrorMessage(data.message || 'Ошибка регистрации');
@@ -43,7 +49,6 @@ export default function Register() {
         <div className="w-full max-w-md p-8 bg-white rounded shadow-md">
           <h2 className="text-2xl font-bold text-center text-gray-800 mb-4">Зарегистрироваться</h2>
 
-          {/* Отображение ошибки */}
           {errorMessage && (
               <div className="mb-4 p-3 bg-red-100 text-red-700 border border-red-300 rounded">
                 {errorMessage}
