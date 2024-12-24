@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcrypt";
 import * as yup from "yup";
+import {generateTokens} from "@/app/lib/serverAuth";
 
 const prisma = new PrismaClient();
 
@@ -23,7 +24,16 @@ export async function POST(req) {
             data: { username, email, password: hashedPassword },
         });
 
-        return new Response(JSON.stringify({ message: "Пользователь успешно зарегистрирован", user }), { status: 201 });
+        const tokens = generateTokens({ userId: user.id });
+
+        return new Response(
+            JSON.stringify({
+                message: "Пользователь успешно зарегистрирован",
+                user,
+                ...tokens, // Возвращаем токены в ответе
+            }),
+            { status: 201 }
+        );
     } catch (error) {
         if (error.name === "ValidationError") {
             return new Response(

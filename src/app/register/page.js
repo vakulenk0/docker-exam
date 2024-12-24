@@ -33,7 +33,12 @@ export default function Register() {
       const data = await response.json();
 
       if (response.ok) {
-        router.push('/login');
+        // Сохраняем токены в localStorage
+        localStorage.setItem('token', data.accessToken);
+        localStorage.setItem('refreshToken', data.refreshToken);
+
+        // Перенаправляем на dashboard
+        router.push('/dashboard');
       } else if (response.status === 400) {
         setErrorMessage(data.errors ? data.errors.join(', ') : data.message);
       } else {
