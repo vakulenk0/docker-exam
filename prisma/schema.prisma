@@ -1,0 +1,27 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql" // или "mysql", "sqlite", в зависимости от вашей БД
+  url      = env("DATABASE_URL") // URL вашей базы данных из .env файла
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  username  String   @unique
+  email     String   @unique
+  password  String
+  createdAt DateTime @default(now())
+  canvases  Canvas[] // Добавляем связь с `Canvas`
+}
+
+model Canvas {
+  id          Int      @id @default(autoincrement())
+  title       String   @default("Новый канвас")
+  content     Json     @default("{}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id])
+}

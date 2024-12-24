@@ -141,6 +141,31 @@ export function useCanvasLogic() {
         opacity: 1.0,
     });
 
+    const saveCanvas = async (saveEndpoint, canvasJSON) => {
+        try {
+            const token = localStorage.getItem('token');
+            const response = await fetch(saveEndpoint, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({ content: canvasJSON }),
+            });
+
+            if (!response.ok) {
+                console.error('Ошибка сохранения на сервер:', await response.text());
+                return false;
+            }
+
+            console.log('Канвас успешно сохранён на сервер');
+            return true;
+        } catch (error) {
+            console.error('Ошибка при сохранении канваса:', error);
+            return false;
+        }
+    };
+
     const handleUndo = () => {
         const canvas = canvasInstanceRef.current;
         if (!canvas) return;
@@ -1054,6 +1079,12 @@ export function useCanvasLogic() {
         const canvasElement = canvasRef.current;
         if (!canvasElement) return;
 
+        // Удаляем предыдущий экземпляр канвы, если он существует
+        if (canvasElement.__canvas) {
+            canvasElement.__canvas.dispose();
+            canvasElement.__canvas = null; // Убираем ссылку на старую канву
+        }
+
         const canvas = new Canvas(canvasElement, {
             backgroundColor: '#EEF2F9',
             selection: true,
@@ -1145,9 +1176,11 @@ export function useCanvasLogic() {
         // При первой загрузке устанавливаем зум
         updateZoomPercent(canvas);
         canvasElement.__canvas = canvas;
+        initializeCanvas({ canvas });
 
         // Очистка при размонтировании
         return () => {
+            canvas.dispose();
             window.removeEventListener('resize', handleResizeCanvas);
             window.removeEventListener('click', handleCloseContextMenu);
             window.removeEventListener('keydown', handleWindowKeyDown, true);
@@ -1170,6 +1203,42 @@ export function useCanvasLogic() {
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    const initializeCanvas = ({ initialData = null, onSaveCallback = null }) => {
+        const canvas = canvasInstanceRef.current;
+
+        if (!canvas) {
+            console.error('Canvas instance is not initialized.');
+            return;
+        }
+
+        // Загрузка данных на холст
+        if (initialData) {
+            canvas.loadFromJSON(initialData, () => {
+                canvas.renderAll();
+            });
+        }
+
+        // Установка коллбека сохранения
+        if (onSaveCallback) {
+            canvas.on('object:modified', () => {
+                const canvasJSON = canvas.toJSON();
+                onSaveCallback(canvasJSON);
+            });
+
+            // Сохранение при добавлении объекта
+            canvas.on('object:added', () => {
+                const canvasJSON = canvas.toJSON();
+                onSaveCallback(canvasJSON);
+            });
+
+            // Сохранение при удалении объекта
+            canvas.on('object:removed', () => {
+                const canvasJSON = canvas.toJSON();
+                onSaveCallback(canvasJSON);
+            });
+        }
+    };
 
     // ======================[ Методы для переключения режимов ]======================
     function setMode(mode, figureType = null) {
@@ -1345,16 +1414,14 @@ export function useCanvasLogic() {
 
     // ======================[ Возвращаем наружу ]======================
     return {
-        canvasRef,
-        contextMenu,
-        menuOptions,
-        textMenu,
-        objectMenu,
-        activeMode,
-        zoomPercent,
-        centerCoordinates,
-        brushSettings,
-        handleToggleDrawing,
+        canvasRef,                // Ссылка на DOM-элемент <canvas>
+        contextMenu,              // Логика контекстного меню
+        menuOptions,              // Опции контекстного меню
+        textMenu, objectMenu,     // Меню текста и объектов
+        activeMode, zoomPercent,  // Состояние зума и режимов
+        centerCoordinates,        // Координаты центра канваса
+        brushSettings,            // Настройки кисти
+        handleToggleDrawing,      // Методы управления
         handleEnableTextAdding,
         handleZoomInButton,
         handleZoomOutButton,
@@ -1366,6 +1433,7 @@ export function useCanvasLogic() {
         handleUpdateBrush,
         handleUndo,
         handleRedo,
+        saveCanvas,               // Метод ручного сохранения
+        initializeCanvas,         // Метод инициализации канваса
     };
-
 }

@@ -1,14 +1,16 @@
 import React from 'react';
 import { useCanvasLogic } from './useCanvasLogic';
-import ZoomIndicator from "@/app/components/ZoomIndicator/component";
-import LeftPanel from "@/app/components/LeftPanel/component";
-import ContextMenu from "@/app/components/ContextMenu/component";
-import TextMenu from "@/app/components/TextMenu/component";
-import ObjectMenu from "@/app/components/ObjectMenu/component";
+import ZoomIndicator from '@/app/components/ZoomIndicator/component';
+import LeftPanel from '@/app/components/LeftPanel/component';
+import ContextMenu from '@/app/components/ContextMenu/component';
+import TextMenu from '@/app/components/TextMenu/component';
+import ObjectMenu from '@/app/components/ObjectMenu/component';
+import { Canvas } from "fabric";
 
-const CanvasComponent = () => {
+const CanvasComponent = ({ initialData, saveEndpoint, onSave }) => {
     const {
         canvasRef,
+        saveCanvas,
         contextMenu,
         menuOptions,
         textMenu,
@@ -29,10 +31,24 @@ const CanvasComponent = () => {
         handleUpdateBrush,
         handleUndo,
         handleRedo,
+        initializeCanvas,
     } = useCanvasLogic();
+
+    React.useEffect(() => {
+        // Инициализируем канву через функцию из useCanvasLogic
+        initializeCanvas({ initialData, onSave: handleSave });
+    }, [initializeCanvas, initialData]);
+
+    const handleSave = async () => {
+        const result = await saveCanvas(saveEndpoint);
+        if (result) {
+            console.log('Канвас сохранён вручную.');
+        }
+    };
 
     return (
         <div className="w-screen h-screen overflow-hidden relative">
+            {/* Индикатор зума */}
             <ZoomIndicator
                 zoomPercent={zoomPercent}
                 centerCoordinates={centerCoordinates}
@@ -40,6 +56,7 @@ const CanvasComponent = () => {
                 onZoomOut={handleZoomOutButton}
             />
 
+            {/* Панель инструментов */}
             <LeftPanel
                 onToggleDrawing={handleToggleDrawing}
                 onAddText={handleEnableTextAdding}
@@ -52,7 +69,7 @@ const CanvasComponent = () => {
                 onRedo={handleRedo}
             />
 
-            {/* Рендер контекстного меню */}
+            {/* Контекстное меню */}
             <ContextMenu
                 isVisible={contextMenu.isVisible}
                 position={contextMenu.position}
@@ -63,6 +80,7 @@ const CanvasComponent = () => {
                 }}
             />
 
+            {/* Меню текста */}
             <TextMenu
                 isVisible={textMenu.isVisible}
                 position={textMenu.position}
@@ -70,6 +88,7 @@ const CanvasComponent = () => {
                 onUpdateText={handleUpdateText}
             />
 
+            {/* Меню объектов */}
             <ObjectMenu
                 isVisible={objectMenu.isVisible}
                 position={objectMenu.position}
@@ -77,8 +96,15 @@ const CanvasComponent = () => {
                 onUpdateObject={handleUpdateObject}
             />
 
-            {/* Канва */}
-            <canvas ref={canvasRef} className="border-0" />
+            <button
+                onClick={handleSave}
+                className="absolute bottom-4 right-4 bg-green-500 text-white px-4 py-2 rounded shadow-lg"
+            >
+                Сохранить
+            </button>
+
+            {/* Холст */}
+            <canvas ref={canvasRef} className="border-0"/>
         </div>
     );
 };
