@@ -3,12 +3,14 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { fetchWithAuth } from "@/app/lib/clientAuth";
+import Image from 'next/image';
 
 export default function Dashboard() {
     const [canvases, setCanvases] = useState([]);
     const [newCanvasTitle, setNewCanvasTitle] = useState('');
-    const [errorMessage, setErrorMessage] = useState('');
     const [username, setUsername] = useState('');
+    const [avatarUrl, setAvatarUrl] = useState('/default-avatar.png');
+    const [isUploading, setIsUploading] = useState(false);
     const router = useRouter();
 
     useEffect(() => {
@@ -23,15 +25,44 @@ export default function Dashboard() {
 
     const fetchUserData = async () => {
         try {
-            const response = await fetchWithAuth('/api/user'); // Реализуйте соответствующий API-эндпоинт
+            const response = await fetchWithAuth('/api/user');
             const data = await response.json();
             if (response.ok) {
                 setUsername(data.username);
-            } else {
-                console.error('Ошибка при загрузке данных пользователя:', data.message);
+                setAvatarUrl(data.avatar || '/default-avatar.png');
             }
         } catch (error) {
             console.error('Ошибка при загрузке данных пользователя:', error);
+        }
+    };
+
+    const handleAvatarChange = async (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            const base64Url = e.target.result;
+            setIsUploading(true);
+            await updateAvatar(base64Url);
+            setIsUploading(false);
+        };
+        reader.readAsDataURL(file);
+    };
+
+    const updateAvatar = async (avatarUrl) => {
+        try {
+            const response = await fetchWithAuth('/api/user/updateAvatar', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ avatarUrl }),
+            });
+            const data = await response.json();
+            if (response.ok) {
+                setAvatarUrl(data.user.avatar);
+            }
+        } catch (error) {
+            console.error('Ошибка при обновлении аватара:', error);
         }
     };
 
@@ -41,15 +72,15 @@ export default function Dashboard() {
             const data = await response.json();
             if (response.ok) {
                 setCanvases(data.canvases);
-            } else {
-                setErrorMessage(data.message || 'Ошибка при загрузке канвасов');
             }
         } catch (error) {
-            setErrorMessage('Ошибка при загрузке данных');
+            console.error('Ошибка при загрузке данных канвасов:', error);
         }
     };
 
     const createCanvas = async () => {
+        if (!newCanvasTitle.trim()) return;
+
         try {
             const response = await fetchWithAuth('/api/canvas/create', {
                 method: 'POST',
@@ -60,11 +91,9 @@ export default function Dashboard() {
             if (response.ok) {
                 setCanvases([...canvases, data.canvas]);
                 setNewCanvasTitle('');
-            } else {
-                setErrorMessage(data.message || 'Ошибка при создании канваса');
             }
         } catch (error) {
-            setErrorMessage('Ошибка при создании канваса');
+            console.error('Ошибка при создании канваса:', error);
         }
     };
 
@@ -77,11 +106,9 @@ export default function Dashboard() {
 
             if (response.ok) {
                 setCanvases(canvases.filter((canvas) => canvas.id !== id));
-            } else {
-                setErrorMessage('Ошибка при удалении канваса');
             }
         } catch (error) {
-            setErrorMessage('Ошибка при удалении канваса');
+            console.error('Ошибка при удалении канваса:', error);
         }
     };
 
@@ -94,11 +121,24 @@ export default function Dashboard() {
     return (
         <div className="min-h-screen bg-gray-100">
             <div className="container mx-auto py-8 px-4">
-                {/* Верхняя панель */}
                 <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-xl font-semibold text-gray-800">
-                        Здравствуйте, {username || 'Гость'}!
-                    </h2>
+                    <div className="flex items-center space-x-4">
+                        {isUploading ? (
+                            <span>Загрузка аватара...</span>
+                        ) : (
+                            <Image
+                                src={avatarUrl}
+                                alt="Аватар пользователя"
+                                width={64}
+                                height={64}
+                                className="rounded-full"
+                                placeholder="blur"
+                                blurDataURL="/default-avatar.png"
+                                loading="lazy"
+                            />
+                        )}
+                        <h2 className="text-xl font-semibold text-gray-800">Привет, {username}!</h2>
+                    </div>
                     <button
                         onClick={logout}
                         className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg shadow-md"
@@ -107,17 +147,24 @@ export default function Dashboard() {
                     </button>
                 </div>
 
-                <h1 className="text-4xl font-bold text-center text-gray-800 mb-6">
-                    Ваши Канвасы
-                </h1>
+                <div className="mb-6 flex items-center space-x-4">
+                    <label
+                        htmlFor="avatar-upload"
+                        className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg shadow-md cursor-pointer"
+                    >
+                        {isUploading ? 'Обновление...' : 'Изменить аватар'}
+                    </label>
+                    <input
+                        id="avatar-upload"
+                        type="file"
+                        accept="image/*"
+                        onChange={handleAvatarChange}
+                        className="hidden"
+                    />
+                </div>
 
-                {errorMessage && (
-                    <div className="mb-4 p-4 bg-red-100 text-red-700 border border-red-300 rounded">
-                        {errorMessage}
-                    </div>
-                )}
+                <h1 className="text-4xl font-bold text-center text-gray-800 mb-6">Ваши Канвасы</h1>
 
-                {/* Форма для добавления канваса */}
                 <div className="flex justify-between items-center mb-6">
                     <input
                         type="text"
@@ -134,11 +181,8 @@ export default function Dashboard() {
                     </button>
                 </div>
 
-                {/* Список канвасов */}
                 {canvases.length === 0 ? (
-                    <div className="text-center text-gray-500">
-                        У вас пока нет канвасов. Создайте свой первый канвас!
-                    </div>
+                    <div className="text-center text-gray-500">У вас пока нет канвасов. Создайте свой первый канвас!</div>
                 ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
                         {canvases.map((canvas) => (
@@ -146,17 +190,12 @@ export default function Dashboard() {
                                 key={canvas.id}
                                 className="p-4 bg-white rounded-lg shadow hover:shadow-lg transition-shadow duration-300"
                             >
-                                <h2 className="text-xl font-semibold text-gray-800 truncate">
-                                    {canvas.title}
-                                </h2>
+                                <h2 className="text-xl font-semibold text-gray-800 truncate">{canvas.title}</h2>
                                 <p className="text-sm text-gray-500 mt-2">
                                     Создан: {new Date(canvas.createdAt).toLocaleDateString()}
                                 </p>
                                 <div className="mt-4 flex justify-between items-center">
-                                    <a
-                                        href={`/canvas/${canvas.id}`}
-                                        className="text-blue-500 hover:underline"
-                                    >
+                                    <a href={`/canvas/${canvas.id}`} className="text-blue-500 hover:underline">
                                         Открыть
                                     </a>
                                     <button
