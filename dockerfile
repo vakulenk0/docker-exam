@@ -12,4 +12,4 @@ COPY . .
 #3000: Это порт, на котором обычно работают приложения Node.js.
 EXPOSE 3000
 
-# CMD ["npm", "run", "dev"]
+CMD ["npm", "run", "dev"]
