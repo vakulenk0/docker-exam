@@ -8,8 +8,19 @@ npm install -g npm@11.0.0(обновление npm)
 создать бд в postgresql
 npx prisma migrate dev --name init(для миграции(создание структуры таблицы в базе))
 
+в .env вставить следующее:
+
+DATABASE_URL="postgresql://postgres:admin@db:5432/whiteboard"
+JWT_SECRET=9cd1ace00b9d727501351c115617ddabc7198defa2fb94804f72c11006199986
+REFRESH_SECRET=b94e9426dd1e5ae18dd90370a79a23ba45aac4270ce4704a3a6e57dc3715e3be
+
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=admin
+POSTGRES_DB=whiteboard
+
 -------------------------------------------------------------------------------------
-docker-compose build (пишем в корне папки с проектом)
+docker-compose up --build (пишем в корне папки с проектом)
+
 
 -------------------------------------------------------------------------------------
 Если не открывается сайт, после docker-compose build
@@ -19,3 +30,31 @@ netstat -ano | findstr :3000
 
 docker-compose down
 docker-compose up --build
+
+-------------------------------------------------------------------------------------
+
+kubectl cluster-info - проверить работоспособность кластера
+kubectl create namespace my-namespace - создать пространство имён
+kubectl get namespaces - получать имена namespaces
+kubectl config set-context --current --namespace=my-namespace - переключиться на нужный namespace
+
+Создаём различные объекты в kubernetes для работы нашего кластера:
+kubectl apply -f app-secret.yaml
+kubectl apply -f postgres-secret.yaml
+kubectl apply -f app-configmap.yaml
+kubectl apply -f persistent-volume.yaml
+kubectl apply -f my-app-service.yaml
+kubectl apply -f postgres-service.yaml
+kubectl apply -f db-deployment.yaml
+kubectl apply -f app-deployment.yaml
+
+kubectl get node/pod/secret/deployment/ConfigMap/pvc(том для хранения данных)/service - получить информацию об нужных объектах kubernetes
+
+b1znesman/app-image:latest (<имя_пользователя>/<название_образа>)
+
+
+
+чтобы с нуля создать образ, дать ему тэг и занести на docker hub:
+docker build -t app-image:latest .
+docker tag app-image:latest b1znesman/app-image:latest
+docker push b1znesman/app-image:latest

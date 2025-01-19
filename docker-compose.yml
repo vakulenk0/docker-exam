@@ -7,6 +7,10 @@ services:
            # Если, к примеру, запись такая: 3000:3000; Слева - port хоста, справа - port контейнера. Когда кто-то обращается к порту 3000 на хостовой машине (например, через http://localhost:3000), 
            # этот запрос будет перенаправлен внутрь контейнера на порт 3000.
       - "3000:3000"
+    # environment:
+    #   - DATABASE_URL=postgresql://postgres:admin@db:5432/whiteboard
+    #   - JWT_SECRET=9cd1ace00b9d727501351c115617ddabc7198defa2fb94804f72c11006199986
+    #   - REFRESH_SECRET=b94e9426dd1e5ae18dd90370a79a23ba45aac4270ce4704a3a6e57dc3715e3be
     env_file:
       - .env
     depends_on: # Говорит о том, что этот контейнер запустится только после создания "db" контейнера
@@ -20,6 +24,10 @@ services:
     container_name: postgres-db
     env_file:
       - .env
+    # environment:
+    #   - POSTGRES_USER=postgres
+    #   - POSTGRES_PASSWORD=admin
+    #   - POSTGRES_DB=whiteboard
     volumes:
       - postgres-data:/var/lib/postgresql/data
     ports:

@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-app-deployment
+spec:
+  replicas: 3  # Мы создаем 3 Pod'а
+  selector:
+    matchLabels:
+      app: my-app
+  template:
+    metadata:
+      labels:
+        app: my-app
+    spec:
+      containers:
+        - name: my-app
+          image: b1znesman/app-image:latest
+          ports:
+            - containerPort: 3000
+          envFrom:
+            - secretRef:
+                name: my-app-secret
+            - configMapRef:
+                name: my-app-config
+          # livenessProbe:
+          #   httpGet:
+          #     path: /healthz
+          #     port: 3000
+          #   initialDelaySeconds: 5
+          #   periodSeconds: 10
+          # readinessProbe:
+          #   httpGet:
+          #     path: /healthz
+          #     port: 3000
+          #   initialDelaySeconds: 5
+          #   periodSeconds: 10

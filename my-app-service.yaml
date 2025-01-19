@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-app-service
+spec:
+  selector:
+    app: my-app
+  ports:
+    - protocol: TCP
+      port: 3000    # Порт, по которому будет доступно приложение
+      targetPort: 3000  # Порт внутри контейнера
+      nodePort: 30001
+  type: NodePort  # Тип Service для доступа снаружи

@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-db-service  # Имя сервиса
+spec:
+  selector:
+    app: postgres-db  # Это должно совпадать с label в вашем deployment
+  ports:
+    - protocol: TCP
+      port: 5432  # Порт, по которому сервис будет доступен
+      targetPort: 5432  # Порт, на котором работает база данных в контейнере
+  clusterIP: None  # Если нужно использовать StatefulSet, можно указать None для headless-сервиса
